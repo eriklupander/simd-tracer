@@ -48,7 +48,7 @@ func Render(width, height int, spheres []Sphere, planes []Plane, renderTo []byte
 	// [/comment]
 	var orig = cameraToWorld.mulVec2(Vec4{0, 0, 0})
 
-	var ray = &Ray{orig: &orig}
+	var ray = &Ray{Orig: &orig}
 	var dir = &Vec4{}
 	var shadowRay = &Ray{}
 	var shadowDir = &Vec4{}
@@ -72,7 +72,7 @@ func Render(width, height int, spheres []Sphere, planes []Plane, renderTo []byte
 			// between the point on the image plane and the camera origin, which
 			// in camera space is (0,0,0):
 			//
-			// ray.dir = normalize(Vec3f(x,y,-1) - Vec3f(0));
+			// ray.Dir = normalize(Vec3f(x,y,-1) - Vec3f(0));
 			// [/comment]
 
 			x := (2*(float32(i)+0.5)/float32(width) - 1) * imageAspectRatio * scale
@@ -81,14 +81,14 @@ func Render(width, height int, spheres []Sphere, planes []Plane, renderTo []byte
 			// Don't forget to transform the ray direction using the camera-to-world matrix.
 			cameraToWorld.mulDirScalar(x, y, -1, dir)
 			dir.normalize()
-			ray.dir = dir
+			ray.Dir = dir
 
 			minT := float32(3.4028235e38)
 			intersectedIdx := -1
 
 			for n := range spheres {
 				cast++
-				t, hit := intersectSphereFullSIMD(ray, spheres[n].Center, spheres[n].RadiusSquared)
+				t, hit := IntersectSphereFullSIMD(ray, spheres[n].Center, spheres[n].RadiusSquared)
 				if hit && t < minT {
 					intersectedIdx = n
 					minT = t
@@ -96,14 +96,14 @@ func Render(width, height int, spheres []Sphere, planes []Plane, renderTo []byte
 			}
 			for n := range planes {
 				cast++
-				planeT, hit := intersectPlane2(planes[n].Normal, planes[n].Point, ray.orig, ray.dir)
+				planeT, hit := intersectPlane2(planes[n].Normal, planes[n].Point, ray.Orig, ray.Dir)
 				if hit && planeT < minT {
 					intersectedIdx = len(spheres) + n
 					minT = planeT
 				}
 			}
 
-			t, hit := intersectSphereFullSIMD(ray, light.Center, light.RadiusSquared)
+			t, hit := IntersectSphereFullSIMD(ray, light.Center, light.RadiusSquared)
 			if hit && t < minT {
 				intersectedIdx = 1000
 				minT = t
@@ -115,7 +115,7 @@ func Render(width, height int, spheres []Sphere, planes []Plane, renderTo []byte
 			if intersectedIdx > -1 {
 				// Compute point of hit
 
-				addMulVec4(ray.orig, ray.dir, minT, hitPoint)
+				addMulVec4(ray.Orig, ray.Dir, minT, hitPoint)
 
 				var fract float32
 				var color Vec4
@@ -125,12 +125,12 @@ func Render(width, height int, spheres []Sphere, planes []Plane, renderTo []byte
 				sub2(hitToLightDir, hitPoint, shadowDir)
 				shadowDir.normalize()
 
-				shadowRay.orig = hitPoint // Should translate by epsilon along shadow dir
-				shadowRay.dir = shadowDir
+				shadowRay.Orig = hitPoint // Should translate by epsilon along shadow Dir
+				shadowRay.Dir = shadowDir
 				obstructed := false
 				for n := range spheres {
 					cast++
-					_, hit := intersectSphereFullSIMD(shadowRay, spheres[n].Center, spheres[n].Radius)
+					_, hit := IntersectSphereFullSIMD(shadowRay, spheres[n].Center, spheres[n].Radius)
 					if hit {
 						obstructed = true
 						break
@@ -146,7 +146,7 @@ func Render(width, height int, spheres []Sphere, planes []Plane, renderTo []byte
 					sub2(hitPoint, spheres[intersectedIdx].Center, hitNormal)
 					hitNormal.normalize()
 
-					normalToReverseCamera := hitNormal[0]*-ray.dir[0] + hitNormal[1]*-ray.dir[1] + hitNormal[2]*-ray.dir[2]
+					normalToReverseCamera := hitNormal[0]*-ray.Dir[0] + hitNormal[1]*-ray.Dir[1] + hitNormal[2]*-ray.Dir[2]
 					fract = max(0.0, normalToReverseCamera)
 					color = spheres[intersectedIdx].Color
 				} else if intersectedIdx == 1000 {
@@ -155,14 +155,14 @@ func Render(width, height int, spheres []Sphere, planes []Plane, renderTo []byte
 					//sub2(hitPoint, light.Center, hitNormal)
 					//hitNormal.normalize()
 					//
-					//normalToReverseCamera := hitNormal[0]*-ray.dir[0] + hitNormal[1]*-ray.dir[1] + hitNormal[2]*-ray.dir[2]
+					//normalToReverseCamera := hitNormal[0]*-ray.Dir[0] + hitNormal[1]*-ray.Dir[1] + hitNormal[2]*-ray.Dir[2]
 					//fract = max(0.0, normalToReverseCamera)
 					fract = 0.96
 					color = light.Color
 				} else {
 					// Plane
 					planeNormal := planes[intersectedIdx-len(spheres)].Normal
-					normalToReverseCamera := planeNormal[0]*-ray.dir[0] + planeNormal[1]*-ray.dir[1] + planeNormal[2]*-ray.dir[2]
+					normalToReverseCamera := planeNormal[0]*-ray.Dir[0] + planeNormal[1]*-ray.Dir[1] + planeNormal[2]*-ray.Dir[2]
 					fract = max(0.0, normalToReverseCamera)
 					color = planes[intersectedIdx-len(spheres)].Color
 				}

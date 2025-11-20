@@ -50,8 +50,8 @@ func (v1 *Vec4) negate() {
 }
 
 type Ray struct {
-	orig *Vec4
-	dir  *Vec4
+	Orig *Vec4
+	Dir  *Vec4
 }
 
 //	func addMul(v1 Vec4, v2 Vec4, mulBy float32, dst Vec4) {

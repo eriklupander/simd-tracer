@@ -5,14 +5,14 @@ import (
 	"simd"
 )
 
-func intersectSphere(ray *Ray, center *Vec4, radiusSquared float32) (float32, bool) {
+func IntersectSphere(ray *Ray, center *Vec4, radiusSquared float32) (float32, bool) {
 	var t0, t1 float32 // solutions for t if the ray intersects
 	//#if 0
 	// Geometric solution
 	var L Vec4
-	sub2(center, ray.orig, &L) // -3,-1,-20 ray orig is 3,4,20 and center is 0,3,0
+	sub2(center, ray.Orig, &L) // -3,-1,-20 ray Orig is 3,4,20 and center is 0,3,0
 	//, &L) // Vec3f
-	tca := L.dotProduct(ray.dir) // 20.22 ray dir is   -0.15241566 -0.00019870223 -0.9883165 // DotProductSIMDSlice(L, ray.dir)
+	tca := L.dotProduct(ray.Dir) // 20.22 ray Dir is   -0.15241566 -0.00019870223 -0.9883165 // DotProductSIMDSlice(L, ray.Dir)
 	if tca < 0 {
 		return 0.0, false
 	}
@@ -26,9 +26,9 @@ func intersectSphere(ray *Ray, center *Vec4, radiusSquared float32) (float32, bo
 	t1 = tca + thc
 	//#else
 	// Analytic solution
-	//L := sub(ray.orig, center)
-	//a := ray.dir.dotProduct(ray.dir)
-	//b := 2.0 * ray.dir.dotProduct(L)
+	//L := sub(ray.Orig, center)
+	//a := ray.Dir.dotProduct(ray.Dir)
+	//b := 2.0 * ray.Dir.dotProduct(L)
 	//c := L.dotProduct(L) - radius*radius
 	//t0, t1, ok := solveQuadratic(a, b, c)
 	//if !ok {
@@ -53,14 +53,14 @@ func intersectSphere(ray *Ray, center *Vec4, radiusSquared float32) (float32, bo
 	return t, true
 }
 
-func intersectSphereSIMD(ray *Ray, center *Vec4, radiusSquared float32) (float32, bool) {
+func IntersectSphereSIMD(ray *Ray, center *Vec4, radiusSquared float32) (float32, bool) {
 	var t0, t1 float32 // solutions for t if the ray intersects
 	//#if 0
 	// Geometric solution
 	var L Vec4
-	sub2(center, ray.orig, &L)
+	sub2(center, ray.Orig, &L)
 	//, &L) // Vec3f
-	tca := DotProductSIMDVec4(&L, ray.dir) //L.DotProductSIMDSlice(ray.dir)
+	tca := DotProductSIMDVec4(&L, ray.Dir) //L.DotProductSIMDSlice(ray.Dir)
 	if tca < 0 {
 		return 0.0, false
 	}
@@ -73,9 +73,9 @@ func intersectSphereSIMD(ray *Ray, center *Vec4, radiusSquared float32) (float32
 	t1 = tca + thc
 	//#else
 	// Analytic solution
-	//L := sub(ray.orig, center)
-	//a := ray.dir.dotProduct(ray.dir)
-	//b := 2.0 * ray.dir.dotProduct(L)
+	//L := sub(ray.Orig, center)
+	//a := ray.Dir.dotProduct(ray.Dir)
+	//b := 2.0 * ray.Dir.dotProduct(L)
 	//c := L.dotProduct(L) - radius*radius
 	//t0, t1, ok := solveQuadratic(a, b, c)
 	//if !ok {
@@ -100,12 +100,12 @@ func intersectSphereSIMD(ray *Ray, center *Vec4, radiusSquared float32) (float32
 	return t, true
 }
 
-func intersectSphereFullSIMD(ray *Ray, center *Vec4, radiusSquared float32) (float32, bool) {
+func IntersectSphereFullSIMD(ray *Ray, center *Vec4, radiusSquared float32) (float32, bool) {
 	var t0, t1 float32 // solutions for t if the ray intersects
 	// Geometric solution
 	r1 := simd.LoadFloat32x4((*[4]float32)(center))
-	r2 := simd.LoadFloat32x4((*[4]float32)(ray.orig))
-	rDir := simd.LoadFloat32x4((*[4]float32)(ray.dir))
+	r2 := simd.LoadFloat32x4((*[4]float32)(ray.Orig))
+	rDir := simd.LoadFloat32x4((*[4]float32)(ray.Dir))
 
 	// Vector from ray origin to center of sphere
 	L := r1.Sub(r2)
@@ -127,13 +127,14 @@ func intersectSphereFullSIMD(ray *Ray, center *Vec4, radiusSquared float32) (flo
 	sumdst2 = L.MulAdd(L, sumdst2)
 	sumdst2 = sumdst2.AddPairs(sumdst2) // => [18,50,18,50]
 	sumdst2 = sumdst2.AddPairs(sumdst2) // => [68,68,68,68]
-	d2 := sumdst2.GetElem(0) - tca*tca
+	var d2 = float32(0.0)
+	d2 = sumdst2.GetElem(0) - tca*tca
 
 	// If d2 is larger than the squared radius of sphere we have no intersection.
 	if d2 > radiusSquared {
 		return 0.0, false
 	}
-	
+
 	// irritating float32 <-> float64 type conversions
 	thc := float32(math.Sqrt(float64(radiusSquared - d2)))
 	t0 = tca - thc
