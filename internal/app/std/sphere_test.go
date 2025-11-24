@@ -30,10 +30,6 @@ func TestIntersectSphereFullSIMD(t *testing.T) {
 	assert.InEpsilon(t, 20.0, float64(dist), 0.01)
 }
 
-// 0 = {float32} -0.15241566
-// 1 = {float32} -0.00019870223
-// 2 = {float32} -0.9883165
-// &[-0.14217138 -0.042353157 -0.98893553 0]
 func TestIntersectSpheres(t *testing.T) {
 	spheres := StandardSpheres()
 	ray := &Ray{
@@ -73,6 +69,51 @@ func BenchmarkIntersectSpheresSIMD(b *testing.B) {
 		}
 	}
 }
+
+func BenchmarkIntersectSingleSphere(b *testing.B) {
+	s := Sphere{
+		Center:        &Vec4{0, 3, 0, 0},
+		RadiusSquared: 1,
+		Color:         Vec4{0, 1, 1},
+	}
+	ray := &Ray{
+		Orig: &Vec4{3.1, 4.1, 20.1, 0},
+		Dir:  &Vec4{-0.47163668, 0.25912055, -0.8428614, 0},
+	}
+	for b.Loop() {
+		_, _ = IntersectSphere(ray, s.Center, s.RadiusSquared)
+	}
+}
+
+func BenchmarkIntersectSingleSpheresSIMD(b *testing.B) {
+
+	ray := &Ray{
+		Orig: &Vec4{3.1, 4.1, 20.1, 0},
+		Dir:  &Vec4{-0.47163668, 0.25912055, -0.8428614, 0},
+	}
+
+	center := &Vec4{0, 3, 0, 0}
+	b.Logf("%p", ray.Orig)
+	b.Logf("%p", ray.Dir)
+	b.Logf("%p", center)
+	for b.Loop() {
+		_, _ = IntersectSphereSIMD(ray, center, 1)
+	}
+}
+
+func BenchmarkIntersectSpheresSIMDMethod(b *testing.B) {
+	spheres := StandardSpheres()
+	ray := &Ray{
+		Orig: &Vec4{3.1, 4.1, 20.1, 0},
+		Dir:  &Vec4{-0.47163668, 0.25912055, -0.8428614, 0},
+	}
+	for b.Loop() {
+		for _, s := range spheres {
+			_, _ = IntersectSphereSIMDMethod(ray, s.Center, s.RadiusSquared)
+		}
+	}
+}
+
 func BenchmarkIntersectSpheresFullSIMD(b *testing.B) {
 	spheres := StandardSpheres()
 	ray := &Ray{
@@ -86,29 +127,15 @@ func BenchmarkIntersectSpheresFullSIMD(b *testing.B) {
 	}
 }
 
-//
-//func BenchmarkIntersectSpheresIntegersOnly(b *testing.B) {
-//	spheres := StandardSpheres()
-//	ray := &Ray{
-//		Orig: &Vec4{3.1, 4.1, 20.1, 0},
-//		Dir:  &Vec4{-1, 0, -1, 0},
-//	}
-//	for b.Loop() {
-//		for _, s := range spheres {
-//			_, _ = IntersectSphere(ray, s.Center, s.RadiusSquared)
-//		}
-//	}
-//}
-//
-//func BenchmarkIntersectSpheresSIMDIntegersOnly(b *testing.B) {
-//	spheres := StandardSpheres()
-//	ray := &Ray{
-//		Orig: &Vec4{3.1, 4.1, 20.1, 0},
-//		Dir:  &Vec4{-1, 0, -1, 0},
-//	}
-//	for b.Loop() {
-//		for _, s := range spheres {
-//			_, _ = IntersectSphereSIMD(ray, s.Center, s.RadiusSquared)
-//		}
-//	}
-//}
+func BenchmarkIntersectSpheresDotGoSIMD(b *testing.B) {
+	spheres := StandardSpheres()
+	ray := &Ray{
+		Orig: &Vec4{3.1, 4.1, 20.1, 0},
+		Dir:  &Vec4{-0.47163668, 0.25912055, -0.8428614, 0},
+	}
+	for b.Loop() {
+		for _, s := range spheres {
+			_, _ = IntersectSphereDotGoSIMD(ray, s.Center, s.RadiusSquared)
+		}
+	}
+}

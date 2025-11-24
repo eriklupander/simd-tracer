@@ -4,7 +4,10 @@ package std
 
 import (
 	"math"
+	"simd"
 )
+
+type Vec4D [4]float64
 
 type Vec4 [4]float32
 
@@ -21,7 +24,19 @@ func (v1 *Vec4) normalize() {
 }
 
 func (v1 *Vec4) dotProduct(v2 *Vec4) float32 {
-	return v1[0]*v2[0] + v1[1]*v2[1] + v1[2]*v2[2]
+	return v1[0]*v2[0] + v1[1]*v2[1] + v1[2]*v2[2] + v1[3]*v2[3]
+}
+
+func (v1 *Vec4) dotProductSIMD(v2 *Vec4) float32 {
+	r1 := simd.LoadFloat32x4((*[4]float32)(v1))
+	r2 := simd.LoadFloat32x4((*[4]float32)(v2))
+	sumdst := simd.Float32x4{}
+
+	sumdst = r1.MulAdd(r2, sumdst)       // => [6,12,20,30]
+	sumdst2 := sumdst.AddPairs(sumdst)   // => [18,50,18,50]
+	sumdst3 := sumdst2.AddPairs(sumdst2) // => [68,68,68,68]
+
+	return sumdst3.GetElem(0)
 }
 
 func (v1 *Vec4) crossProduct(t2 *Vec4, dst *Vec4) {
@@ -29,12 +44,6 @@ func (v1 *Vec4) crossProduct(t2 *Vec4, dst *Vec4) {
 	dst[0] = v1[1]*t2[2] - v1[2]*t2[1]
 	dst[1] = v1[2]*t2[0] - v1[0]*t2[2]
 	dst[2] = v1[0]*t2[1] - v1[1]*t2[0]
-
-	/*
-		c[0] = a[1]*b[2] - a[2]*b[1]
-		c[1] = a[2]*b[0] - a[0]*b[2]
-		c[2] = a[0]*b[1] - a[1]*b[0]
-	*/
 }
 
 func (v1 *Vec4) mul(f float32) {
@@ -54,11 +63,6 @@ type Ray struct {
 	Dir  *Vec4
 }
 
-//	func addMul(v1 Vec4, v2 Vec4, mulBy float32, dst Vec4) {
-//		dst[0] = v1[0] + v2[0]*mulBy
-//		dst[1] = v1[1] + v2[1]*mulBy
-//		dst[2] = v1[2] + v2[2]*mulBy
-//	}
 func addMulVec4(v1 *Vec4, v2 *Vec4, mulBy float32, dst *Vec4) {
 
 	dst[0] = v1[0] + v2[0]*mulBy
@@ -110,22 +114,7 @@ func (x *Matrix44) indexed(i int) float32 {
 	return x[i/4][i%4]
 }
 
-//
-//func (x *Matrix44) mulVec(src Vec4f) (dst Vec4f) {
-//
-//	var a, b, c, w float32
-//
-//	a = src[0]*x[0][0] + src[1]*x[1][0] + src[2]*x[2][0] + x[3][0]
-//	b = src[0]*x[0][1] + src[1]*x[1][1] + src[2]*x[2][1] + x[3][1]
-//	c = src[0]*x[0][2] + src[1]*x[1][2] + src[2]*x[2][2] + x[3][2]
-//	w = src[0]*x[0][3] + src[1]*x[1][3] + src[2]*x[2][3] + x[3][3]
-//
-//	dst = &Vec3f{a / w, b / w, c / w}
-//
-//	return dst
-//}
-
-func (x *Matrix44) mulVec2(src Vec4) Vec4 {
+func (x *Matrix44) mulVec(src Vec4) Vec4 {
 
 	var a, b, c, w float32
 
@@ -138,25 +127,11 @@ func (x *Matrix44) mulVec2(src Vec4) Vec4 {
 	dst[0] = a / w
 	dst[1] = b / w
 	dst[2] = c / w
-	//	dst = &Vec3f{a / w, b / w, c / w}
 
 	return dst
 }
 
-//
-//func (x *Matrix44) mulDir(src Vec4f) (dst Vec4f) {
-//
-//	var a, b, c float32
-//
-//	a = src[0]*x[0][0] + src[1]*x[1][0] + src[2]*x[2][0]
-//	b = src[0]*x[0][1] + src[1]*x[1][1] + src[2]*x[2][1]
-//	c = src[0]*x[0][2] + src[1]*x[1][2] + src[2]*x[2][2]
-//
-//	dst = &Vec3f{a, b, c}
-//	return dst
-//}
-
-func (x *Matrix44) mulDir2(src Vec4) Vec4 {
+func (x *Matrix44) mulDir(src Vec4) Vec4 {
 	dst := NewVec4()
 	dst[0] = src[0]*x[0][0] + src[1]*x[1][0] + src[2]*x[2][0]
 	dst[1] = src[0]*x[0][1] + src[1]*x[1][1] + src[2]*x[2][1]
@@ -165,24 +140,19 @@ func (x *Matrix44) mulDir2(src Vec4) Vec4 {
 }
 
 func (x *Matrix44) mulDirScalar(a float32, b float32, c float32, dst *Vec4) {
-
 	dst[0] = a*x[0][0] + b*x[1][0] + c*x[2][0]
 	dst[1] = a*x[0][1] + b*x[1][1] + c*x[2][1]
 	dst[2] = a*x[0][2] + b*x[1][2] + c*x[2][2]
-
 }
 
-//	func sub(a, b Vec4f) Vec4f {
-//		return &Vec3f{a[0] - b[0], a[1] - b[1], a[2] - b[2]}
-//	}
-func sub2(a, b *Vec4, dst *Vec4) {
+func sub(a, b *Vec4, dst *Vec4) {
 	dst[0] = a[0] - b[0]
 	dst[1] = a[1] - b[1]
 	dst[2] = a[2] - b[2]
 	dst[3] = a[3] - b[3]
 }
 
-func multiplyMatricies(m1 Matrix44, m2 Matrix44) Matrix44 {
+func multiplyMatrices(m1 Matrix44, m2 Matrix44) Matrix44 {
 	m3 := NewMatrix44f()
 	for row := 0; row < 4; row++ {
 		for col := 0; col < 4; col++ {
@@ -193,14 +163,11 @@ func multiplyMatricies(m1 Matrix44, m2 Matrix44) Matrix44 {
 }
 
 func newTranslationMatrix(x, y, z float32) Matrix44 {
-
-	m1 := NewIdentityMatrix44() //NewMat4x4(make([]float64, 16))
-	//copy(m1.Elems, IdentityMatrix.Elems)
+	m1 := NewIdentityMatrix44()
 	m1[0][3] = x
 	m1[1][3] = y
 	m1[2][3] = z
 	return m1
-
 }
 
 func multiply4x4(m1 Matrix44, m2 Matrix44, row int, col int) float32 {
@@ -239,7 +206,6 @@ func Determinant3x3(m1 Matrix33) float32 {
 	return det
 }
 
-// Determinant4x4
 func Determinant4x4(m1 Matrix44) float32 {
 	det := float32(0.0)
 	for col := 0; col < 4; col++ {

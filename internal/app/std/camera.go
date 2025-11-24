@@ -1,15 +1,17 @@
 package std
 
 // ViewTransform creates a column-minor view-transformation matrix. When used in simd-tracer, which uses col-major,
-// remember to call transpose first.
+// remember to call transpose first. This code is copied from one of my earlier ray/path tracers, based on
+// "The Ray Tracer Challenge" book.
 func ViewTransform(from, to, up *Vec4) Matrix44 {
 	// Create a new matrix from the identity matrix.
 	vt := NewIdentityMatrix44()
 
 	// Sub creates the initial vector between the eye and what we're looking at.
 	var forward Vec4
-	sub2(to, from, &forward)
+	sub(to, from, &forward)
 
+	// Normalize the forward vector
 	forward.normalize()
 
 	// Normalize the up vector
@@ -38,5 +40,5 @@ func ViewTransform(from, to, up *Vec4) Matrix44 {
 
 	// finally, move the view matrix opposite the camera position to emulate that the camera has moved.
 	translationM := newTranslationMatrix(-from[0], -from[1], -from[2])
-	return multiplyMatricies(vt, translationM)
+	return multiplyMatrices(vt, translationM)
 }

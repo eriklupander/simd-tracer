@@ -1,5 +1,14 @@
 package std
 
+// StandardSpheres returns 6 spheres oriented as seen below looking directly down along the y axis. The capital X denotes
+// two spheres with one being directly above the other.
+//
+//	x  X  x
+//	   x
+//	   x
+//
+//	   V
+//	 camera
 func StandardSpheres() []Sphere {
 	spheres := make([]Sphere, 0)
 
