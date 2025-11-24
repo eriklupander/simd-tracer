@@ -44,19 +44,6 @@ func DotProductSIMDSlice(v1, v2 []float32) float32 {
 
 	return sumdst3.GetElem(zero)
 }
-func DotProductSIMDSlice64(v1, v2 []float64) float64 {
-
-	r1 := simd.LoadFloat64x4((*[4]float64)(v1))
-	r2 := simd.LoadFloat64x4((*[4]float64)(v2))
-	sumdst := simd.Float64x4{}
-
-	sumdst = r1.MulAdd(r2, sumdst)       // => [6,12,20,30]
-	sumdst2 := sumdst.AddPairs(sumdst)   // => [18,50,18,50]
-	sumdst3 := sumdst2.AddPairs(sumdst2) // => [68,68,68,68]
-	out := [4]float64{}
-	sumdst3.Store(&out)
-	return out[zero]
-}
 
 // DotProductSIMDArray performs a single dot product for the passed arrayas
 func DotProductSIMDArray(v1, v2 [4]float32) float32 {
@@ -109,27 +96,12 @@ func DotProductSIMDVec4(v1, v2 *Vec4) float32 {
 	return sumdst.GetElem(zero)
 }
 
-func DotProductSIMDVec4D(v1, v2 *Vec4D) float64 {
-
-	sumdst := simd.Float64x4{}
-	//indicies := simd.LoadUint64x4Slice([]uint64{0, 2, 1, 3})
-
-	r1 := simd.LoadFloat64x4((*[4]float64)(v1))
-	r2 := simd.LoadFloat64x4((*[4]float64)(v2))
-
-	sumdst = r1.MulAdd(r2, sumdst)   // => [6,12,20,30]
-	sumdst = sumdst.AddPairs(sumdst) // => [18,50,18,50]
-
-	sumdst = sumdst.SelectFromPairGrouped(2, 4, sumdst)
-	return 0.0
-}
-
 // DotProductSIMD2x4 computes full dot products for two 4-element vectors. Elements 0-3 form the first dot product,
 // elements 4-7 form the second dot product.
 func DotProductSIMD2x4(v1, v2 []float32) (float32, float32) {
 
-	r1 := simd.LoadFloat32x8((*[8]float32)(v1))
-	r2 := simd.LoadFloat32x8((*[8]float32)(v2))
+	r1 := simd.LoadFloat32x8((*[8]float32)(v1)) // [2,3,4,5,2,3,4,5]
+	r2 := simd.LoadFloat32x8((*[8]float32)(v2)) // [3,4,5,6,3,4,5,7]
 
 	sumdst := simd.Float32x8{}
 	sumdst = r1.MulAdd(r2, sumdst)   // => [6,12,20,30,6,12,20,35]
@@ -141,6 +113,8 @@ func DotProductSIMD2x4(v1, v2 []float32) (float32, float32) {
 	return out[0], out[4]
 }
 
+// DotProductSIMD2x4HiLo is identical to DotProductSIMD2x4, except that it uses GetHi/GetLo with GetElem to extract
+// the final dot products instead of performing a store.
 func DotProductSIMD2x4HiLo(v1, v2 []float32) (float32, float32) {
 
 	r1 := simd.LoadFloat32x8((*[8]float32)(v1))

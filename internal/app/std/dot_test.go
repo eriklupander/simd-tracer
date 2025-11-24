@@ -98,6 +98,15 @@ func TestDotProductSIMD2x4(t *testing.T) {
 	assert.EqualValues(t, 73.0, sum2)
 }
 
+func TestDotProductSIMD2x4HiLo(t *testing.T) {
+	v1 := []float32{2, 3, 4, 5, 2, 3, 4, 5}
+	v2 := []float32{3, 4, 5, 6, 3, 4, 5, 7}
+
+	sum1, sum2 := DotProductSIMD2x4HiLo(v1, v2)
+	assert.EqualValues(t, 68.0, sum1)
+	assert.EqualValues(t, 73.0, sum2)
+}
+
 var Out float32
 
 func BenchmarkDot(b *testing.B) {

@@ -93,9 +93,6 @@ func BenchmarkIntersectSingleSpheresSIMD(b *testing.B) {
 	}
 
 	center := &Vec4{0, 3, 0, 0}
-	b.Logf("%p", ray.Orig)
-	b.Logf("%p", ray.Dir)
-	b.Logf("%p", center)
 	for b.Loop() {
 		_, _ = IntersectSphereSIMD(ray, center, 1)
 	}
