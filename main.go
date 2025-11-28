@@ -19,8 +19,8 @@ const iterations = 1
 const enablePprof = false
 
 const (
-	screenWidth  = 640
-	screenHeight = 480
+	screenWidth  = 3200
+	screenHeight = 2400
 )
 
 func main() {
@@ -29,7 +29,7 @@ func main() {
 		defer cleanFn()
 	}
 
-	spheres := std.StandardSpheres()
+	spheres := std.SixteenSpheres()
 	planes := std.CornellBox()
 
 	st := time.Now()

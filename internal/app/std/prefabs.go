@@ -110,3 +110,19 @@ func CornellBox() []Plane {
 	return append(planes, leftWall, rightWall, floor, ceil, backWall, frontWall)
 
 }
+
+func SixteenSpheres() []Sphere {
+	spheres := make([]Sphere, 0)
+	for i := range 4 {
+		for j := range 4 {
+			// Origin
+			spheres = append(spheres, Sphere{
+				Center:        &Vec4{-3 + float32(i)*2.5, -1, float32(j) * 2.5, 0},
+				Radius:        1,
+				RadiusSquared: 1,
+				Color:         Vec4{float32(j) * 0.25, 0.5, 1 - (float32(i) * 0.25)},
+			})
+		}
+	}
+	return spheres
+}

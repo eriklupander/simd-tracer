@@ -44,9 +44,9 @@ func Render(width, height int, spheres []Sphere, planes []Plane, renderTo *bytes
 		for i := 0; i < width; i++ {
 
 			// Useful to troubleshoot / debug a single pixel.
-			//if j != 1200 || i != 1216 {
-			//	continue
-			//}
+			if j != 1840 || i != 1166 {
+				continue
+			}
 
 			// Compute x and y components of ray direction given pixel coords.
 			x := (2*(float32(i)+0.5)/float32(width) - 1) * imageAspectRatio * scale
