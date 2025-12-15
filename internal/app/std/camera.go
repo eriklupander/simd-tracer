@@ -9,21 +9,21 @@ func ViewTransform(from, to, up *Vec4) Matrix44 {
 
 	// Sub creates the initial vector between the eye and what we're looking at.
 	var forward Vec4
-	sub(to, from, &forward)
+	Sub(to, from, &forward)
 
 	// Normalize the forward vector
-	forward.normalize()
+	forward.Normalize()
 
 	// Normalize the up vector
-	up.normalize()
+	up.Normalize()
 
 	// Use the cross product to get the "third" axis (in this case, not the forward or up one)
 	var left Vec4
-	forward.crossProduct(up, &left)
+	forward.CrossProduct(up, &left)
 
 	// Again, use cross product between the just computed left and forward to get the "true" up.
 	var trueUp Vec4
-	left.crossProduct(&forward, &trueUp)
+	left.CrossProduct(&forward, &trueUp)
 
 	// copy each axis into the matrix
 	vt[0][0] = left[0]

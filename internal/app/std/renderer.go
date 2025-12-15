@@ -30,7 +30,7 @@ func Render(width, height int, spheres []Sphere, planes []Plane, renderTo *bytes
 	imageAspectRatio := float32(width) / float32(height)
 
 	// Transform the ray origin to world-space
-	var orig = cameraToWorld.mulVec(Vec4{0, 0, 0})
+	var orig = cameraToWorld.MulVec(Vec4{0, 0, 0})
 
 	var ray = &Ray{Orig: &orig}
 	var dir = &Vec4{}
@@ -44,17 +44,17 @@ func Render(width, height int, spheres []Sphere, planes []Plane, renderTo *bytes
 		for i := 0; i < width; i++ {
 
 			// Useful to troubleshoot / debug a single pixel.
-			if j != 1840 || i != 1166 {
-				continue
-			}
+			//if j != 1840 || i != 1166 {
+			//	continue
+			//}
 
 			// Compute x and y components of ray direction given pixel coords.
 			x := (2*(float32(i)+0.5)/float32(width) - 1) * imageAspectRatio * scale
 			y := (1 - 2*(float32(j)+0.5)/float32(height)) * scale // Optimize: This can be moved to before the inner for-loop
 
 			// Transform the ray direction using the camera-to-world matrix.
-			cameraToWorld.mulDirScalar(x, y, -1, dir)
-			dir.normalize()
+			cameraToWorld.MulDirScalar(x, y, -1, dir)
+			dir.Normalize()
 			ray.Dir = dir
 
 			minT := float32(3.4028235e38)
@@ -71,7 +71,7 @@ func Render(width, height int, spheres []Sphere, planes []Plane, renderTo *bytes
 				}
 			}
 			for n := range planes {
-				planeT, hit := intersectPlane2(planes[n].Normal, planes[n].Point, ray.Orig, ray.Dir)
+				planeT, hit := IntersectPlane2(planes[n].Normal, planes[n].Point, ray.Orig, ray.Dir)
 				if hit && planeT < minT {
 					intersectedIdx = len(spheres) + n
 					minT = planeT
@@ -86,14 +86,14 @@ func Render(width, height int, spheres []Sphere, planes []Plane, renderTo *bytes
 
 			if intersectedIdx > -1 {
 				// Compute point of hit
-				addMulVec4(ray.Orig, ray.Dir, minT, hitPoint)
+				AddMulVec4(ray.Orig, ray.Dir, minT, hitPoint)
 
 				var fract float32
 				var color Vec4
 
 				// cast a shadow ray against point light (represented by white sphere)
-				sub(hitToLightDir, hitPoint, shadowDir)
-				shadowDir.normalize()
+				Sub(hitToLightDir, hitPoint, shadowDir)
+				shadowDir.Normalize()
 
 				shadowRay.Orig = hitPoint // Should translate by epsilon along shadow Dir
 				shadowRay.Dir = shadowDir
@@ -118,8 +118,8 @@ func Render(width, height int, spheres []Sphere, planes []Plane, renderTo *bytes
 					color = Vec4{0, 0, 0}
 				} else if intersectedIdx < len(spheres) {
 					// Sphere
-					sub(hitPoint, spheres[intersectedIdx].Center, hitNormal)
-					hitNormal.normalize()
+					Sub(hitPoint, spheres[intersectedIdx].Center, hitNormal)
+					hitNormal.Normalize()
 
 					normalToReverseCamera := hitNormal[0]*-ray.Dir[0] + hitNormal[1]*-ray.Dir[1] + hitNormal[2]*-ray.Dir[2]
 					fract = max(0.0, normalToReverseCamera)

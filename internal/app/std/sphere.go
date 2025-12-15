@@ -5,21 +5,21 @@ import (
 	"simd"
 )
 
-// IntersectSphere performs a ray-sphere intersection using "plain go" dotProduct.
+// IntersectSphere performs a ray-sphere intersection using "plain go" DotProduct.
 func IntersectSphere(ray *Ray, center *Vec4, radiusSquared float32) (float32, bool) {
 
 	// Vector subtraction to get new vector from sphere center to ray origin
 	var L Vec4
-	sub(center, ray.Orig, &L)
+	Sub(center, ray.Orig, &L)
 
 	// Compute dot product of L and ray direction. If tca is negative, no intersection.
-	tca := L.dotProduct(ray.Dir)
+	tca := L.DotProduct(ray.Dir)
 	if tca < 0 {
 		return 0.0, false
 	}
 
 	// Dot product of L with itself
-	lD := L.dotProduct(&L)
+	lD := L.DotProduct(&L)
 	d2 := lD - tca*tca
 
 	// If larger than radius squared, no intersection
@@ -58,7 +58,7 @@ func IntersectSphere(ray *Ray, center *Vec4, radiusSquared float32) (float32, bo
 func IntersectSphereSIMD(ray *Ray, center *Vec4, radiusSquared float32) (float32, bool) {
 
 	var L Vec4
-	sub(center, ray.Orig, &L)
+	Sub(center, ray.Orig, &L)
 
 	tca := DotProductSIMDVec4(&L, ray.Dir)
 	if tca < 0 {
@@ -96,7 +96,7 @@ func IntersectSphereSIMD(ray *Ray, center *Vec4, radiusSquared float32) (float32
 func IntersectSphereSIMDMethod(ray *Ray, center *Vec4, radiusSquared float32) (float32, bool) {
 
 	var L = Vec4{0, 0, 0, 0}
-	sub(center, ray.Orig, &L)
+	Sub(center, ray.Orig, &L)
 
 	tca := L.dotProductSIMD(ray.Dir)
 	if tca < 0 {
@@ -198,7 +198,7 @@ func IntersectSphereDotGoSIMD(ray *Ray, center *Vec4, radiusSquared float32) (fl
 
 	// Geometric solution
 	var L Vec4
-	sub(center, ray.Orig, &L)
+	Sub(center, ray.Orig, &L)
 
 	tca := DotGoSIMD(L[:], ray.Dir[:])
 	if tca < 0 {

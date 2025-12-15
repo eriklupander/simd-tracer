@@ -9,6 +9,7 @@ import (
 	"runtime/pprof"
 	"time"
 
+	"github.com/eriklupander/simd-tracer/internal/app/adv"
 	"github.com/eriklupander/simd-tracer/internal/app/std"
 )
 
@@ -19,8 +20,8 @@ const iterations = 1
 const enablePprof = false
 
 const (
-	screenWidth  = 3200
-	screenHeight = 2400
+	screenWidth  = 640
+	screenHeight = 480
 )
 
 func main() {
@@ -32,12 +33,13 @@ func main() {
 	spheres := std.SixteenSpheres()
 	planes := std.CornellBox()
 
-	st := time.Now()
 	outBuf := new(bytes.Buffer)
+
+	st := time.Now()
 	for range 1 {
 		std.Render(screenWidth, screenHeight, spheres, planes, outBuf)
 	}
-	fmt.Printf("Done in %v", time.Since(st))
+	fmt.Printf("Legacy done in %v", time.Since(st))
 
 	img := image.NewRGBA(image.Rect(0, 0, screenWidth, screenHeight))
 	img.Pix = outBuf.Bytes()
@@ -49,6 +51,27 @@ func main() {
 		panic(err.Error())
 	}
 	_ = f.Close()
+
+	simdSpheres := adv.AsStructOfArrays(spheres)
+	simdPlanes := adv.PlanesAsStructOfArrays(planes)
+	simdTriangles := adv.TrianglesSmallSideBySide()
+	outBuf2 := new(bytes.Buffer)
+	st2 := time.Now()
+	for range 1 {
+		adv.Render(screenWidth, screenHeight, simdSpheres, simdPlanes, simdTriangles, outBuf2)
+	}
+	fmt.Printf("SIMD done in %v", time.Since(st2))
+
+	img2 := image.NewRGBA(image.Rect(0, 0, screenWidth, screenHeight))
+	img2.Pix = outBuf2.Bytes()
+	f2, err := os.OpenFile("out2.png", os.O_WRONLY|os.O_CREATE, 0600)
+	if err != nil {
+		panic(err)
+	}
+	if err := png.Encode(f2, img2); err != nil {
+		panic(err.Error())
+	}
+	_ = f2.Close()
 }
 
 func enableProfiling() func() {

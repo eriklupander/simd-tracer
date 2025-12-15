@@ -16,14 +16,14 @@ func NewVec4() Vec4 {
 	return out
 }
 
-func (v1 *Vec4) normalize() {
+func (v1 *Vec4) Normalize() {
 	magnitude := float32(math.Sqrt(float64(v1[0]*v1[0] + v1[1]*v1[1] + v1[2]*v1[2])))
 	v1[0] = v1[0] / magnitude
 	v1[1] = v1[1] / magnitude
 	v1[2] = v1[2] / magnitude
 }
 
-func (v1 *Vec4) dotProduct(v2 *Vec4) float32 {
+func (v1 *Vec4) DotProduct(v2 *Vec4) float32 {
 	return v1[0]*v2[0] + v1[1]*v2[1] + v1[2]*v2[2] + v1[3]*v2[3]
 }
 
@@ -39,7 +39,7 @@ func (v1 *Vec4) dotProductSIMD(v2 *Vec4) float32 {
 	return sumdst3.GetElem(0)
 }
 
-func (v1 *Vec4) crossProduct(t2 *Vec4, dst *Vec4) {
+func (v1 *Vec4) CrossProduct(t2 *Vec4, dst *Vec4) {
 
 	dst[0] = v1[1]*t2[2] - v1[2]*t2[1]
 	dst[1] = v1[2]*t2[0] - v1[0]*t2[2]
@@ -52,7 +52,7 @@ func (v1 *Vec4) mul(f float32) {
 	v1[2] = v1[2] * f
 }
 
-func (v1 *Vec4) negate() {
+func (v1 *Vec4) Negate() {
 	v1[0] = -v1[0]
 	v1[1] = -v1[1]
 	v1[2] = -v1[2]
@@ -63,7 +63,7 @@ type Ray struct {
 	Dir  *Vec4
 }
 
-func addMulVec4(v1 *Vec4, v2 *Vec4, mulBy float32, dst *Vec4) {
+func AddMulVec4(v1 *Vec4, v2 *Vec4, mulBy float32, dst *Vec4) {
 
 	dst[0] = v1[0] + v2[0]*mulBy
 	dst[1] = v1[1] + v2[1]*mulBy
@@ -114,7 +114,7 @@ func (x *Matrix44) indexed(i int) float32 {
 	return x[i/4][i%4]
 }
 
-func (x *Matrix44) mulVec(src Vec4) Vec4 {
+func (x *Matrix44) MulVec(src Vec4) Vec4 {
 
 	var a, b, c, w float32
 
@@ -139,13 +139,13 @@ func (x *Matrix44) mulDir(src Vec4) Vec4 {
 	return dst
 }
 
-func (x *Matrix44) mulDirScalar(a float32, b float32, c float32, dst *Vec4) {
+func (x *Matrix44) MulDirScalar(a float32, b float32, c float32, dst *Vec4) {
 	dst[0] = a*x[0][0] + b*x[1][0] + c*x[2][0]
 	dst[1] = a*x[0][1] + b*x[1][1] + c*x[2][1]
 	dst[2] = a*x[0][2] + b*x[1][2] + c*x[2][2]
 }
 
-func sub(a, b *Vec4, dst *Vec4) {
+func Sub(a, b *Vec4, dst *Vec4) {
 	dst[0] = a[0] - b[0]
 	dst[1] = a[1] - b[1]
 	dst[2] = a[2] - b[2]
