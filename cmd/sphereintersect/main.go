@@ -11,7 +11,7 @@ import (
 // data or possibly attach to with an external profiler such as Intruments.
 func main() {
 
-	//f2, err := os.Create("simd.pprof")
+	//f2, err := os.Create("archsimd.pprof")
 	//if err != nil {
 	//	panic(err.Error())
 	//}

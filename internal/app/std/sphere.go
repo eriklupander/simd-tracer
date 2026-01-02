@@ -2,7 +2,7 @@ package std
 
 import (
 	"math"
-	"simd"
+	"simd/archsimd"
 )
 
 // IntersectSphere performs a ray-sphere intersection using "plain go" DotProduct.
@@ -129,21 +129,21 @@ func IntersectSphereSIMDMethod(ray *Ray, center *Vec4, radiusSquared float32) (f
 	return t0, true
 }
 
-var zeroes = simd.BroadcastFloat32x4(0.0)
+var zeroes = archsimd.BroadcastFloat32x4(0.0)
 
 // IntersectSphereFullSIMD is a WiP rewrite of ray-sphere intersection, trying to use SIMD more broadly.
 func IntersectSphereFullSIMD(ray *Ray, center *Vec4, radiusSquared float32) (float32, bool) {
 	var t0, t1 float32
 
-	r1 := simd.LoadFloat32x4((*[4]float32)(center))
-	r2 := simd.LoadFloat32x4((*[4]float32)(ray.Orig))
-	rDir := simd.LoadFloat32x4((*[4]float32)(ray.Dir))
+	r1 := archsimd.LoadFloat32x4((*[4]float32)(center))
+	r2 := archsimd.LoadFloat32x4((*[4]float32)(ray.Orig))
+	rDir := archsimd.LoadFloat32x4((*[4]float32)(ray.Dir))
 
 	// Vector from ray origin to center of sphere
 	L := r1.Sub(r2)
 
 	// Dot product of L and ray direction
-	sumdst := simd.Float32x4{}
+	sumdst := archsimd.Float32x4{}
 	sumdst = L.MulAdd(rDir, sumdst)  // => [6,12,20,30]
 	sumdst = sumdst.AddPairs(sumdst) // => [18,50,18,50]
 	sumdst = sumdst.AddPairs(sumdst) // => [68,68,68,68]
@@ -156,11 +156,11 @@ func IntersectSphereFullSIMD(ray *Ray, center *Vec4, radiusSquared float32) (flo
 	}
 
 	// Dot product of L and L
-	sumdst2 := simd.Float32x4{}
+	sumdst2 := archsimd.Float32x4{}
 	sumdst2 = L.MulAdd(L, sumdst2)
 	sumdst2 = sumdst2.AddPairs(sumdst2) // => [18,50,18,50]
 	sumdst2 = sumdst2.AddPairs(sumdst2) // => [68,68,68,68]
-	tcaSquared := simd.BroadcastFloat32x4(tca)
+	tcaSquared := archsimd.BroadcastFloat32x4(tca)
 	tcaSquared = tcaSquared.Mul(tcaSquared)
 	d2 := sumdst2.Sub(tcaSquared).GetElem(0)
 

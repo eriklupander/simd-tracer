@@ -1,7 +1,7 @@
 package adv
 
 import (
-	"simd"
+	"simd/archsimd"
 	"testing"
 
 	"github.com/eriklupander/simd-tracer/internal/app/std"
@@ -41,9 +41,9 @@ func TestShadowRayWithIntersection(t *testing.T) {
 	spheres := AsStructOfArrays(std.SixteenSpheres())
 	assert.True(t, IntersectSpheresSIMDShadowRay(ray, spheres))
 }
- 
+
 func TestFindLowest(t *testing.T) {
-	minT := simd.LoadFloat32x8Slice([]float32{3, 2, 1, 3, 3, 7, 12, 3})
+	minT := archsimd.LoadFloat32x8Slice([]float32{3, 2, 1, 3, 3, 7, 12, 3})
 	hi := minT.GetHi()
 	i := hi.Min(minT.GetLo())
 
@@ -51,8 +51,7 @@ func TestFindLowest(t *testing.T) {
 	i = i.Min(i.SelectFromPair(2, 3, 0, 1, i))
 	i = i.Min(i.SelectFromPair(3, 0, 1, 2, i))
 
-	t.Log(i)
-
+	assert.Equal(t, float32(1), i.GetElem(0))
 }
 
 func TestIntersectSpheres(t *testing.T) {
@@ -81,18 +80,6 @@ func TestIntersectSpheresSIMD(t *testing.T) {
 	assert.Equal(t, 5, hitIndex)
 	assert.InEpsilon(t, 17, t0, 0.1)
 }
-
-//func TestIntersectSpheresSIMDExt(t *testing.T) {
-//	ray := &std.Ray{
-//		Orig: &std.Vec4{3, 4, 20, 0},
-//		Dir:  &std.Vec4{-0.16645914, -0.24594483, -0.95488346, 0},
-//	}
-//
-//	spheres := AsStructOfArrays(std.SixteenSpheres())
-//	results := make([]float32, spheres.Count)
-//	IntersectSpheresSIMDExt(ray, spheres, results)
-//	t.Log(results)
-//}
 
 func BenchmarkIntersectSpheres(b *testing.B) {
 	ray := &std.Ray{

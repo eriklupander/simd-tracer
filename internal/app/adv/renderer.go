@@ -21,7 +21,7 @@ var light = std.Sphere{
 func Render(width, height int, spheres *Spheres, planes *Planes, triangles *Triangles, renderTo *bytes.Buffer) {
 	hitToLightDir := &std.Vec4{2, 5.4, 0}
 
-	cameraOrigin := &std.Vec4{3, 4, 20}
+	cameraOrigin := &std.Vec4{3, 4, 30}
 	lookAt := &std.Vec4{3, 4, 0}
 	up := &std.Vec4{0, 1, 0}
 	vt := std.ViewTransform(cameraOrigin, lookAt, up)
@@ -55,7 +55,7 @@ func Render(width, height int, spheres *Spheres, planes *Planes, triangles *Tria
 			dir.Normalize()
 			ray.Dir = dir
 
-			//if j != 350 || i != 320 {
+			//if j != 402 || i != 310 {
 			//	continue
 			//}
 
@@ -111,7 +111,9 @@ func Render(width, height int, spheres *Spheres, planes *Planes, triangles *Tria
 				//
 				// Also, note that we can simplify shadow ray checking, there is no need to know minT or _which_ primitive
 				// that obstructed the ray to the light source.
-				obstructed := IntersectSpheresSIMDShadowRay(shadowRay, spheres)
+				//fmt.Printf("Orig: %v,%v,%v\n", shadowRay.Orig[0], shadowRay.Orig[1], shadowRay.Orig[2])
+				//fmt.Printf("Dir  :%v,%v,%v\n", shadowRay.Dir[0], shadowRay.Dir[1], shadowRay.Dir[2])
+				obstructed := IntersectSpheresSIMDShadowRay(shadowRay, spheres) || IntersectTrianglesShadowRaySIMD(shadowRay, triangles)
 
 				// Compute final pixel color. Uses a hideous trick to discern spheres from planes by offsetting
 				// plane intersection index (intersectedIdx) with the number of spheres.

@@ -4,7 +4,7 @@ package std
 
 import (
 	"math"
-	"simd"
+	"simd/archsimd"
 )
 
 type Vec4D [4]float64
@@ -28,9 +28,9 @@ func (v1 *Vec4) DotProduct(v2 *Vec4) float32 {
 }
 
 func (v1 *Vec4) dotProductSIMD(v2 *Vec4) float32 {
-	r1 := simd.LoadFloat32x4((*[4]float32)(v1))
-	r2 := simd.LoadFloat32x4((*[4]float32)(v2))
-	sumdst := simd.Float32x4{}
+	r1 := archsimd.LoadFloat32x4((*[4]float32)(v1))
+	r2 := archsimd.LoadFloat32x4((*[4]float32)(v2))
+	sumdst := archsimd.Float32x4{}
 
 	sumdst = r1.MulAdd(r2, sumdst)       // => [6,12,20,30]
 	sumdst2 := sumdst.AddPairs(sumdst)   // => [18,50,18,50]

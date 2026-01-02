@@ -3,24 +3,34 @@
 package std
 
 import (
-	"simd"
+	"simd/archsimd"
 )
 
+// DotProduct computes the dot product of v1, v2, given the first four elements. Will panic if len of either v1 or v2 is
+// less than 4.
 func DotProduct(v1, v2 []float32) float32 {
 	return v1[0]*v2[0] + v1[1]*v2[1] + v1[2]*v2[2] + v1[3]*v2[3]
 }
 
+// DotProduct2x4 computes two dot products using elements 0-3 and 4-7 from v1 and v2, respectively.
 func DotProduct2x4(v1, v2 []float32) (float32, float32) {
 	sum := v1[0]*v2[0] + v1[1]*v2[1] + v1[2]*v2[2] + v1[3]*v2[3]
 	sum2 := v1[4]*v2[4] + v1[5]*v2[5] + v1[6]*v2[6] + v1[7]*v2[7]
 	return sum, sum2
 }
 
-func DotProductSIMDManualAdd(v1, v2 []float32) (float32, float32) {
-	sumdst := simd.Float32x8{}
+// DotProduct8 computes dot products column-wise for the elements in x,y,w,z and x2, y2, z2, w2
+func DotProduct8(x, y, z, w, x2, y2, z2, w2 []float32, dotProducts []float32) {
+	for n := range 8 {
+		dotProducts[n] = x[n]*x2[n] + y[n]*y2[n] + z[n]*z2[n] + w[n]*w2[n] // Perhaps this loop could be manually unrolled.
+	}
+}
 
-	r1 := simd.LoadFloat32x8((*[8]float32)(v1))
-	r2 := simd.LoadFloat32x8((*[8]float32)(v2))
+func DotProductSIMDManualAdd(v1, v2 []float32) (float32, float32) {
+	sumdst := archsimd.Float32x8{}
+
+	r1 := archsimd.LoadFloat32x8((*[8]float32)(v1))
+	r2 := archsimd.LoadFloat32x8((*[8]float32)(v2))
 
 	sumdst = r1.MulAdd(r2, sumdst)
 
@@ -34,23 +44,23 @@ const zero = 0
 
 // DotProductSIMDSlice performs a single dot product for the passed slices.
 func DotProductSIMDSlice(v1, v2 []float32) float32 {
-	r1 := simd.LoadFloat32x4((*[4]float32)(v1))
-	r2 := simd.LoadFloat32x4((*[4]float32)(v2))
-	sumdst := simd.Float32x4{}
+	r1 := archsimd.LoadFloat32x4Slice(v1)
+	r2 := archsimd.LoadFloat32x4Slice(v2)
+	sumdst := archsimd.Float32x4{}
 
-	sumdst = r1.MulAdd(r2, sumdst)       // => [6,12,20,30]
-	sumdst2 := sumdst.AddPairs(sumdst)   // => [18,50,18,50]
-	sumdst3 := sumdst2.AddPairs(sumdst2) // => [68,68,68,68]
+	sumdst = r1.MulAdd(r2, sumdst)   // => [6,12,20,30]
+	sumdst = sumdst.AddPairs(sumdst) // => [18,50,18,50]
+	sumdst = sumdst.AddPairs(sumdst) // => [68,68,68,68]
 
-	return sumdst3.GetElem(zero)
+	return sumdst.GetElem(zero)
 }
 
 // DotProductSIMDArray performs a single dot product for the passed arrayas
 func DotProductSIMDArray(v1, v2 [4]float32) float32 {
-	sumdst := simd.Float32x4{}
+	sumdst := archsimd.Float32x4{}
 
-	r1 := simd.LoadFloat32x4(&v1)
-	r2 := simd.LoadFloat32x4(&v2)
+	r1 := archsimd.LoadFloat32x4(&v1)
+	r2 := archsimd.LoadFloat32x4(&v2)
 
 	sumdst = r1.MulAdd(r2, sumdst)   // => [6,12,20,30]
 	sumdst = sumdst.AddPairs(sumdst) // => [18,50,18,50]
@@ -60,10 +70,10 @@ func DotProductSIMDArray(v1, v2 [4]float32) float32 {
 
 // DotProductSIMDArrayPointer performs a single dot product for the passed arrayas
 func DotProductSIMDArrayPointer(v1, v2 *[4]float32) float32 {
-	sumdst := simd.Float32x4{}
+	sumdst := archsimd.Float32x4{}
 
-	r1 := simd.LoadFloat32x4(v1)
-	r2 := simd.LoadFloat32x4(v2)
+	r1 := archsimd.LoadFloat32x4(v1)
+	r2 := archsimd.LoadFloat32x4(v2)
 
 	sumdst = r1.MulAdd(r2, sumdst)   // => [6,12,20,30]
 	sumdst = sumdst.AddPairs(sumdst) // => [18,50,18,50]
@@ -71,12 +81,12 @@ func DotProductSIMDArrayPointer(v1, v2 *[4]float32) float32 {
 	return sumdst.GetElem(zero)
 }
 
-// DotProductSIMDArrayPointer8 performs a single dot product for the passed arrayas
+// DotProductSIMDArrayPointer8 performs a single dot product for the passed arrays
 func DotProductSIMDArrayPointer8(v1 [8]float32) float32 {
-	sumdst := simd.Float32x4{}
+	sumdst := archsimd.Float32x4{}
 
-	r1 := simd.LoadFloat32x4((*[4]float32)(v1[0:4]))
-	r2 := simd.LoadFloat32x4((*[4]float32)(v1[4:8]))
+	r1 := archsimd.LoadFloat32x4((*[4]float32)(v1[0:4]))
+	r2 := archsimd.LoadFloat32x4((*[4]float32)(v1[4:8]))
 
 	sumdst = r1.MulAdd(r2, sumdst)   // => [6,12,20,30]
 	sumdst = sumdst.AddPairs(sumdst) // => [18,50,18,50]
@@ -85,10 +95,10 @@ func DotProductSIMDArrayPointer8(v1 [8]float32) float32 {
 }
 
 func DotProductSIMDVec4(v1, v2 *Vec4) float32 {
-	sumdst := simd.Float32x4{}
+	sumdst := archsimd.Float32x4{}
 
-	r1 := simd.LoadFloat32x4((*[4]float32)(v1))
-	r2 := simd.LoadFloat32x4((*[4]float32)(v2))
+	r1 := archsimd.LoadFloat32x4((*[4]float32)(v1))
+	r2 := archsimd.LoadFloat32x4((*[4]float32)(v2))
 
 	sumdst = r1.MulAdd(r2, sumdst)   // => [6,12,20,30]
 	sumdst = sumdst.AddPairs(sumdst) // => [18,50,18,50]
@@ -96,14 +106,28 @@ func DotProductSIMDVec4(v1, v2 *Vec4) float32 {
 	return sumdst.GetElem(zero)
 }
 
-// DotProductSIMD2x4 computes full dot products for two 4-element vectors. Elements 0-3 form the first dot product,
-// elements 4-7 form the second dot product.
+// DotProductSIMD2x4 computes full dot products for two 4-element vectors. Elements 0-3 forms the first dot product,
+// elements 4-7 forms the second dot product.
 func DotProductSIMD2x4(v1, v2 []float32) (float32, float32) {
 
-	r1 := simd.LoadFloat32x8((*[8]float32)(v1)) // [2,3,4,5,2,3,4,5]
-	r2 := simd.LoadFloat32x8((*[8]float32)(v2)) // [3,4,5,6,3,4,5,7]
+	r1 := archsimd.LoadFloat32x8((*[8]float32)(v1)) // [2,3,4,5,2,3,4,5]
+	r2 := archsimd.LoadFloat32x8((*[8]float32)(v2)) // [3,4,5,6,3,4,5,7]
 
-	sumdst := simd.Float32x8{}
+	sumdst := archsimd.Float32x8{}
+	sumdst = r1.MulAdd(r2, sumdst)   // => [6,12,20,30,6,12,20,35]
+	sumdst = sumdst.AddPairs(sumdst) // => [18,50,18,50,18,55,18,55]
+	sumdst = sumdst.AddPairs(sumdst) // => [68,68,68,68,73,73,73,73]
+	out := [8]float32{}
+	sumdst.Store(&out)
+
+	return out[0], out[4]
+}
+
+// DotProductSIMD2x4FromFloat32x8 computes full dot products for two 4-element vectors. Elements 0-3 forms the first dot product,
+// elements 4-7 forms the second dot product. This function accepts archsimd.Float32x8 as parameters.
+func DotProductSIMD2x4FromFloat32x8(r1, r2 archsimd.Float32x8) (float32, float32) {
+
+	sumdst := archsimd.Float32x8{}
 	sumdst = r1.MulAdd(r2, sumdst)   // => [6,12,20,30,6,12,20,35]
 	sumdst = sumdst.AddPairs(sumdst) // => [18,50,18,50,18,55,18,55]
 	sumdst = sumdst.AddPairs(sumdst) // => [68,68,68,68,73,73,73,73]
@@ -117,10 +141,10 @@ func DotProductSIMD2x4(v1, v2 []float32) (float32, float32) {
 // the final dot products instead of performing a store.
 func DotProductSIMD2x4HiLo(v1, v2 []float32) (float32, float32) {
 
-	r1 := simd.LoadFloat32x8((*[8]float32)(v1))
-	r2 := simd.LoadFloat32x8((*[8]float32)(v2))
+	r1 := archsimd.LoadFloat32x8((*[8]float32)(v1))
+	r2 := archsimd.LoadFloat32x8((*[8]float32)(v2))
 
-	sumdst := simd.Float32x8{}
+	sumdst := archsimd.Float32x8{}
 	sumdst = r1.MulAdd(r2, sumdst)   // => [6,12,20,30,6,12,20,35]
 	sumdst = sumdst.AddPairs(sumdst) // => [18,50,18,50,18,55,18,55]
 	sumdst = sumdst.AddPairs(sumdst) // => [68,68,68,68,73,73,73,73]
@@ -132,18 +156,18 @@ func DotProductSIMD2x4HiLo(v1, v2 []float32) (float32, float32) {
 
 // From https://go.dev/play/p/ZaruM_PzP1X
 func DotAVX256a(x []float32, y []float32) float32 {
-	var a simd.Float32x8
+	var a archsimd.Float32x8
 	if len(y) < len(x) {
 		panic("slice y is shorter than slice x")
 	}
 	i := 0
 	for ; i < len(x)-8; i += 8 { // this idiom is friendly to bounds check elimination
-		xv := simd.LoadFloat32x8Slice(x[i : i+8])
-		yv := simd.LoadFloat32x8Slice(y[i : i+8])
+		xv := archsimd.LoadFloat32x8Slice(x[i : i+8])
+		yv := archsimd.LoadFloat32x8Slice(y[i : i+8])
 		a = yv.MulAdd(xv, a)
 	}
-	xv := simd.LoadFloat32x8SlicePart(x[i:])
-	yv := simd.LoadFloat32x8SlicePart(y[i:])
+	xv := archsimd.LoadFloat32x8SlicePart(x[i:])
+	yv := archsimd.LoadFloat32x8SlicePart(y[i:])
 	a = yv.MulAdd(xv, a)
 	a = a.AddPairs(a) // 01234567                AP 01234567                -> 0+1 2+3 _ _ 4+5 6+7 _ _
 	a = a.AddPairs(a) // 0+1 2+3 _ _ 4+5 6+7 _ _ AP 0+1 2+3 _ _ 4+5 6+7 _ _ -> 0+1+2+3 _ _ _ 4+5+6+7 _ _ _
@@ -154,22 +178,22 @@ func DotAVX256a(x []float32, y []float32) float32 {
 // From https://go.dev/play/p/NY5rJYPoJcl
 func DotGoSIMD(x, y []float32) float32 {
 	var (
-		s0, s1, s2, s3 simd.Float32x8
+		s0, s1, s2, s3 archsimd.Float32x8
 	)
 
 	// Writing anything slice indexing related in constant can reduce the bound checks.
 	// Our bound-check elimination pass is clever at reasoning constants, but struggles
 	// at reasoning expressions with variables.
 	for len(x) >= 32 && len(y) >= 32 {
-		x3 := simd.LoadFloat32x8Slice(x[24:])
-		x2 := simd.LoadFloat32x8Slice(x[16:])
-		x1 := simd.LoadFloat32x8Slice(x[8:])
-		x0 := simd.LoadFloat32x8Slice(x[:])
+		x3 := archsimd.LoadFloat32x8Slice(x[24:])
+		x2 := archsimd.LoadFloat32x8Slice(x[16:])
+		x1 := archsimd.LoadFloat32x8Slice(x[8:])
+		x0 := archsimd.LoadFloat32x8Slice(x[:])
 		x = x[32:]
-		y3 := simd.LoadFloat32x8Slice(y[24:])
-		y2 := simd.LoadFloat32x8Slice(y[16:])
-		y1 := simd.LoadFloat32x8Slice(y[8:])
-		y0 := simd.LoadFloat32x8Slice(y[:])
+		y3 := archsimd.LoadFloat32x8Slice(y[24:])
+		y2 := archsimd.LoadFloat32x8Slice(y[16:])
+		y1 := archsimd.LoadFloat32x8Slice(y[8:])
+		y0 := archsimd.LoadFloat32x8Slice(y[:])
 		y = y[32:]
 
 		s0 = x0.MulAdd(y0, s0)

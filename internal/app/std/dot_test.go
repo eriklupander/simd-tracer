@@ -1,6 +1,7 @@
 package std
 
 import (
+	"simd/archsimd"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -107,43 +108,73 @@ func TestDotProductSIMD2x4HiLo(t *testing.T) {
 	assert.EqualValues(t, 73.0, sum2)
 }
 
-var Out float32
-
 func BenchmarkDot(b *testing.B) {
 	v1 := []float32{2, 3, 4, 5}
 	v2 := []float32{3, 4, 5, 6}
-
+	tot := float32(0.0)
 	for b.Loop() {
-		_ = DotProduct(v1, v2)
+		tot += DotProduct(v1, v2)
 	}
 }
 func BenchmarkDotSIMDMethod(b *testing.B) {
 	v1 := &Vec4{2, 3, 4, 5}
 	v2 := &Vec4{3, 4, 5, 6}
+	tot := float32(0.0)
 	for b.Loop() {
-		_ = v1.dotProductSIMD(v2)
+		tot += v1.dotProductSIMD(v2)
 	}
 }
 func BenchmarkDotSIMDArray(b *testing.B) {
 	v1 := [4]float32{2, 3, 4, 5}
 	v2 := [4]float32{3, 4, 5, 6}
+	tot := float32(0.0)
 	for b.Loop() {
-		_ = DotProductSIMDArray(v1, v2)
+		tot += DotProductSIMDArray(v1, v2)
 	}
 }
 func BenchmarkDotSIMDArrayPtr(b *testing.B) {
 	v1 := &[4]float32{2, 3, 4, 5}
 	v2 := &[4]float32{3, 4, 5, 6}
+	tot := float32(0.0)
 	for b.Loop() {
-		_ = DotProductSIMDArrayPointer(v1, v2)
+		tot += DotProductSIMDArrayPointer(v1, v2)
 	}
 }
 func BenchmarkDotSIMDSlice(b *testing.B) {
 	v1 := []float32{2, 3, 4, 5}
 	v2 := []float32{3, 4, 5, 6}
+	tot := float32(0.0)
 	for b.Loop() {
-		_ = DotProductSIMDSlice(v1, v2)
+		tot += dot(v1, v2)
 	}
+}
+
+var Result float32
+
+func BenchmarkDotSIMDSlice2(b *testing.B) {
+	v1 := []float32{2, 3, 4, 5}
+	v2 := []float32{3, 4, 5, 6}
+
+	for b.Loop() {
+		a := dot(v1, v2)
+		b := dot(v1, v2)
+		c := dot(v1, v2)
+		d := dot(v1, v2)
+		Result += a + b + c + d
+	}
+}
+
+func dot(v1, v2 []float32) float32 {
+
+	r1 := archsimd.LoadFloat32x4((*[4]float32)(v1))
+	r2 := archsimd.LoadFloat32x4((*[4]float32)(v2))
+	sums := archsimd.Float32x4{}
+
+	sums = r1.MulAdd(r2, sums)
+	sums = sums.AddPairs(sums)
+	sums = sums.AddPairs(sums)
+	return sums.GetElem(0)
+
 }
 
 func BenchmarkDot2x(b *testing.B) {
@@ -151,19 +182,20 @@ func BenchmarkDot2x(b *testing.B) {
 	v2 := []float32{3, 4, 5, 6}
 	v3 := []float32{2, 3, 4, 5}
 	v4 := []float32{3, 4, 5, 6}
-
+	tot := float32(0.0)
 	for b.Loop() {
-		_ = DotProduct(v1, v2)
-		_ = DotProduct(v3, v4)
+		tot += DotProduct(v1, v2)
+		tot += DotProduct(v3, v4)
 	}
 }
 
 func BenchmarkDot2x4_2(b *testing.B) {
 	v1 := []float32{2, 3, 4, 5, 2, 3, 4, 5}
 	v2 := []float32{3, 4, 5, 6, 3, 4, 5, 6}
-
+	tot := float32(0.0)
 	for b.Loop() {
-		_, _ = DotProduct2x4(v1, v2)
+		a, b := DotProduct2x4(v1, v2)
+		tot = tot + a + b
 	}
 }
 
@@ -229,9 +261,10 @@ func BenchmarkDot2x4_2(b *testing.B) {
 func BenchmarkDotSIMD2x4(b *testing.B) {
 	v1 := []float32{2, 3, 4, 5, 2, 3, 4, 5}
 	v2 := []float32{3, 4, 5, 6, 3, 4, 5, 6}
-
+	tot := float32(0.0)
 	for b.Loop() {
-		_, _ = DotProductSIMD2x4(v1, v2)
+		a, b := DotProductSIMD2x4(v1, v2)
+		tot = tot + a + b
 	}
 }
 
@@ -269,15 +302,17 @@ func BenchmarkDotSIMD2x4(b *testing.B) {
 func BenchmarkDotAVX256a(b *testing.B) {
 	v1 := []float32{2, 3, 4, 5}
 	v2 := []float32{2, 3, 4, 5}
+	tot := float32(0.0)
 	for b.Loop() {
-		_ = DotAVX256a(v1, v2)
+		tot += DotAVX256a(v1, v2)
 	}
 }
 
 func BenchmarkDotGoSIMD(b *testing.B) {
 	v1 := []float32{2, 3, 4, 5}
 	v2 := []float32{2, 3, 4, 5}
+	tot := float32(0.0)
 	for b.Loop() {
-		_ = DotGoSIMD(v1, v2)
+		tot += DotGoSIMD(v1, v2)
 	}
 }

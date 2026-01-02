@@ -4,7 +4,7 @@ package adv
 
 import (
 	"math"
-	"simd"
+	"simd/archsimd"
 
 	"github.com/eriklupander/simd-tracer/internal/app/std"
 )
@@ -24,28 +24,28 @@ func IntersectPlane2(normal *std.Vec4, pointOnPlane *std.Vec4, orig *std.Vec4, d
 	return t, t > 0.0
 }
 
-var epsilons = simd.BroadcastFloat32x8(0.01)
+var epsilons = archsimd.BroadcastFloat32x8(0.01)
 
 func IntersectPlanesSIMD(r *std.Ray, planes *Planes) (float32, int, bool) {
-	rayOriginX := simd.BroadcastFloat32x8(r.Orig[0])
-	rayOriginY := simd.BroadcastFloat32x8(r.Orig[1])
-	rayOriginZ := simd.BroadcastFloat32x8(r.Orig[2])
-	rayDirectionX := simd.BroadcastFloat32x8(r.Dir[0])
-	rayDirectionY := simd.BroadcastFloat32x8(r.Dir[1])
-	rayDirectionZ := simd.BroadcastFloat32x8(r.Dir[2])
+	rayOriginX := archsimd.BroadcastFloat32x8(r.Orig[0])
+	rayOriginY := archsimd.BroadcastFloat32x8(r.Orig[1])
+	rayOriginZ := archsimd.BroadcastFloat32x8(r.Orig[2])
+	rayDirectionX := archsimd.BroadcastFloat32x8(r.Dir[0])
+	rayDirectionY := archsimd.BroadcastFloat32x8(r.Dir[1])
+	rayDirectionZ := archsimd.BroadcastFloat32x8(r.Dir[2])
 
-	currentMin := simd.BroadcastFloat32x4(math.MaxFloat32)
+	currentMin := archsimd.BroadcastFloat32x4(math.MaxFloat32)
 
 	currentIndex := -1
 	for i := 0; i < planes.Count; i += 8 {
-		normalX := simd.LoadFloat32x8Slice(planes.NormalX[i : i+8])
-		normalY := simd.LoadFloat32x8Slice(planes.NormalY[i : i+8])
-		normalZ := simd.LoadFloat32x8Slice(planes.NormalZ[i : i+8])
+		normalX := archsimd.LoadFloat32x8Slice(planes.NormalX[i : i+8])
+		normalY := archsimd.LoadFloat32x8Slice(planes.NormalY[i : i+8])
+		normalZ := archsimd.LoadFloat32x8Slice(planes.NormalZ[i : i+8])
 
 		lower := rayDirectionX.Mul(normalX).Add(rayDirectionY.Mul(normalY)).Add(rayDirectionZ.Mul(normalZ))
 
 		// If none of the values in lower are negative, we have no intersections
-		if lower.GreaterEqual(zeroes).AsInt32x8().IsZero() {
+		if lower.GreaterEqual(zeroes).ToInt32x8().IsZero() {
 			continue
 		}
 
@@ -54,9 +54,9 @@ func IntersectPlanesSIMD(r *std.Ray, planes *Planes) (float32, int, bool) {
 		negativesMask := lower.LessEqual(zeroes)
 		lower = lower.Merge(epsilons, negativesMask)
 
-		pointX := simd.LoadFloat32x8Slice(planes.PointX[i : i+8])
-		pointY := simd.LoadFloat32x8Slice(planes.PointY[i : i+8])
-		pointZ := simd.LoadFloat32x8Slice(planes.PointZ[i : i+8])
+		pointX := archsimd.LoadFloat32x8Slice(planes.PointX[i : i+8])
+		pointY := archsimd.LoadFloat32x8Slice(planes.PointY[i : i+8])
+		pointZ := archsimd.LoadFloat32x8Slice(planes.PointZ[i : i+8])
 
 		hitFromOriginX := pointX.Sub(rayOriginX)
 		hitFromOriginY := pointY.Sub(rayOriginY)
@@ -69,7 +69,7 @@ func IntersectPlanesSIMD(r *std.Ray, planes *Planes) (float32, int, bool) {
 		// t's > 0 are hits. Find the closest t for this iteration. We can first check so at least one t is positive.
 		// (In a cornell box, we'll always have an intersection with a plane)
 		negativeMask := t.LessEqual(zeroes)
-		if negativeMask.AsInt32x8().IsZero() { // All values negative
+		if negativeMask.ToInt32x8().IsZero() { // All values negative
 			continue
 		}
 
@@ -78,7 +78,7 @@ func IntersectPlanesSIMD(r *std.Ray, planes *Planes) (float32, int, bool) {
 		t = t.Merge(maxT, otherMask)
 
 		// Now, we need to find the smallest non-zero element in minT. This code is identical to the spheres one, should
-		// be possible to use a common function - but be aware of inling.
+		// be possible to use a common function - but be aware of inlining.
 		hi := t.GetHi()
 		lo := t.GetLo()
 		tX := hi.Min(lo) // min( [8,2,6,4], [5,1,8,3]) => [5,1,6,3]
@@ -90,15 +90,15 @@ func IntersectPlanesSIMD(r *std.Ray, planes *Planes) (float32, int, bool) {
 		// Check if this iteration's min is less than existing. If not we can skip
 		// running the semi-expensive code figuring out which sphere index we've
 		// intersected as closest.
-		msk := currentMin.Less(tX).AsInt32x4()
+		msk := currentMin.Less(tX).ToInt32x4()
 		if !msk.IsZero() {
 			continue
 		}
 		currentMin = tX
 
 		// The final step is to figure out index of the intersected plane.
-		maskHi := currentMin.Equal(hi).AsInt32x4()
-		maskLo := currentMin.Equal(lo).AsInt32x4()
+		maskHi := currentMin.Equal(hi).ToInt32x4()
+		maskLo := currentMin.Equal(lo).ToInt32x4()
 
 		for ii := range 4 {
 			if maskLo.Xor(firstElemSetMask).IsZero() {

@@ -2,7 +2,7 @@ package adv
 
 import (
 	"math"
-	"simd"
+	"simd/archsimd"
 
 	"github.com/eriklupander/simd-tracer/internal/app/std"
 )
@@ -141,31 +141,31 @@ func IntersectTriangleMT(ray *std.Ray, v0, v1, v2 *std.Vec4, idx int) (float32, 
 
 func IntersectTrianglesSIMD(r *std.Ray, triangles *Triangles) (float32, float32, float32, int, bool) {
 
-	rayOriginX := simd.BroadcastFloat32x8(r.Orig[0])
-	rayOriginY := simd.BroadcastFloat32x8(r.Orig[1])
-	rayOriginZ := simd.BroadcastFloat32x8(r.Orig[2])
-	rayDirectionX := simd.BroadcastFloat32x8(r.Dir[0])
-	rayDirectionY := simd.BroadcastFloat32x8(r.Dir[1])
-	rayDirectionZ := simd.BroadcastFloat32x8(r.Dir[2])
+	rayOriginX := archsimd.BroadcastFloat32x8(r.Orig[0])
+	rayOriginY := archsimd.BroadcastFloat32x8(r.Orig[1])
+	rayOriginZ := archsimd.BroadcastFloat32x8(r.Orig[2])
+	rayDirectionX := archsimd.BroadcastFloat32x8(r.Dir[0])
+	rayDirectionY := archsimd.BroadcastFloat32x8(r.Dir[1])
+	rayDirectionZ := archsimd.BroadcastFloat32x8(r.Dir[2])
 
-	one := simd.BroadcastFloat32x8(1.0)
-	currentMin := simd.BroadcastFloat32x4(maxF32)
-	currentU := simd.BroadcastFloat32x8(0)
-	currentV := simd.BroadcastFloat32x8(0)
+	one := archsimd.BroadcastFloat32x8(1.0)
+	currentMin := archsimd.BroadcastFloat32x4(maxF32)
+	currentU := archsimd.BroadcastFloat32x8(0)
+	currentV := archsimd.BroadcastFloat32x8(0)
 
 	var currentIndex = -1
 	for i := 0; i < triangles.Count; i += 8 {
-		v0x := simd.LoadFloat32x8Slice(triangles.v0x[i : i+8])
-		v0y := simd.LoadFloat32x8Slice(triangles.v0y[i : i+8])
-		v0z := simd.LoadFloat32x8Slice(triangles.v0z[i : i+8])
+		v0x := archsimd.LoadFloat32x8Slice(triangles.v0x[i : i+8])
+		v0y := archsimd.LoadFloat32x8Slice(triangles.v0y[i : i+8])
+		v0z := archsimd.LoadFloat32x8Slice(triangles.v0z[i : i+8])
 
-		v1x := simd.LoadFloat32x8Slice(triangles.v1x[i : i+8])
-		v1y := simd.LoadFloat32x8Slice(triangles.v1y[i : i+8])
-		v1z := simd.LoadFloat32x8Slice(triangles.v1z[i : i+8])
+		v1x := archsimd.LoadFloat32x8Slice(triangles.v1x[i : i+8])
+		v1y := archsimd.LoadFloat32x8Slice(triangles.v1y[i : i+8])
+		v1z := archsimd.LoadFloat32x8Slice(triangles.v1z[i : i+8])
 
-		v2x := simd.LoadFloat32x8Slice(triangles.v2x[i : i+8])
-		v2y := simd.LoadFloat32x8Slice(triangles.v2y[i : i+8])
-		v2z := simd.LoadFloat32x8Slice(triangles.v2z[i : i+8])
+		v2x := archsimd.LoadFloat32x8Slice(triangles.v2x[i : i+8])
+		v2y := archsimd.LoadFloat32x8Slice(triangles.v2y[i : i+8])
+		v2z := archsimd.LoadFloat32x8Slice(triangles.v2z[i : i+8])
 
 		// Compute the plane normal by creating two vectors from coord A to B and C, then cross product.
 		v0v1x := v1x.Sub(v0x)
@@ -197,7 +197,7 @@ func IntersectTrianglesSIMD(r *std.Ray, triangles *Triangles) (float32, float32,
 		// Check if all u are < 0
 		msk1 := u.Greater(zeroes)
 		msk2 := u.Less(one)
-		if msk1.AsInt32x8().IsZero() || msk2.AsInt32x8().IsZero() {
+		if msk1.ToInt32x8().IsZero() || msk2.ToInt32x8().IsZero() {
 			continue
 		}
 		// We need to mask off any u that is NOT 0 to 1
@@ -212,13 +212,12 @@ func IntersectTrianglesSIMD(r *std.Ray, triangles *Triangles) (float32, float32,
 		v = v.Masked(msk3) // Mask off any triangles we know we cannot hit given mask from U
 		//	v: 0.413464
 		uv := u.Add(v)
-		//fmt.Printf("u: %v\n", u)
-		//fmt.Printf("v: %v\n", v)
-		//fmt.Printf("uv: %v\n", uv)
+
 		msk1x := v.Greater(zeroes)
 		msk2x := uv.Less(one)
-		//if v < 0 || u+v > 1 {
-		if msk1x.AsInt32x8().IsZero() || msk2x.AsInt32x8().IsZero() {
+
+		// TODO fix this, uv contains a lot of zeroes.
+		if msk1x.ToInt32x8().IsZero() || msk2x.ToInt32x8().IsZero() {
 			continue
 		}
 
@@ -233,8 +232,8 @@ func IntersectTrianglesSIMD(r *std.Ray, triangles *Triangles) (float32, float32,
 
 		// We have a new closest intersection. We need to determine which index, which
 		// is needed to figure out which u, v to store for this iteration.
-		maskLo := currentMin.Equal(t.GetLo()).AsInt32x4()
-		maskHi := currentMin.Equal(t.GetHi()).AsInt32x4()
+		maskLo := currentMin.Equal(t.GetLo()).ToInt32x4()
+		maskHi := currentMin.Equal(t.GetHi()).ToInt32x4()
 
 		// Figure out _which_ index in the mask(s) that has value 1.
 		currentIndex = resolveCurrentIndex(maskLo, maskHi, i, currentIndex)
@@ -243,24 +242,25 @@ func IntersectTrianglesSIMD(r *std.Ray, triangles *Triangles) (float32, float32,
 		currentU = u
 		currentV = v
 	}
+
+	// Check if no triangle at all was intersected
 	if currentIndex == -1 {
 		return 0, 0, 0, -1, false
 	}
-	// value is in lower or higher
 
+	// Next, we need to extract u and v from the currentU/currentV Float32x8 vectors given currentIndex.
+	// Since Float32x8 does not allow use of GetElem directly, we need to figure out whether currentIndex
+	// are among the low or hi lanes. Lo, currentIndex is 0-3, Hi, 4-7. Since currentIndex could be > 8, use remainder
+	// to figure out the index in the vectors.
 	uvIndex := uint8(currentIndex % 8)
-	all := currentU.SelectFromPairGrouped(uvIndex, uvIndex+4, uvIndex, uvIndex+4, currentV)
 	if uvIndex < 4 {
-		return currentMin.GetElem(0), all.GetLo().GetElem(0), all.GetLo().GetElem(1), currentIndex, true
+		return currentMin.GetElem(0), currentU.GetLo().GetElem(uvIndex), currentV.GetLo().GetElem(uvIndex), currentIndex, true
 	} else {
-		return currentMin.GetElem(0), all.GetHi().GetElem(1), all.GetHi().GetElem(0), currentIndex, true
+		return currentMin.GetElem(0), currentU.GetHi().GetElem(uvIndex), currentV.GetHi().GetElem(uvIndex), currentIndex, true
 	}
-	//// Shuffle so U ends up in element 0, V in element 1.
-	//finalCoords := uVals.SelectFromPair(uvIndex, uvIndex+4, uvIndex, uvIndex+4, vVals)
-
 }
 
-func findMinT(minT simd.Float32x8, currentMin *simd.Float32x4) bool {
+func findMinT(minT archsimd.Float32x8, currentMin *archsimd.Float32x4) bool {
 	// Get rid of zeroes in minT. First, create a mask for all elements in minT being greater than zero (the ones we want to keep)
 	// Then, do a masked merge, turning elements where mask is false to float32 max value.
 	otherMask := minT.Greater(zeroes) // [0,-2,2,0,3,0,-1,0] => greater mask => [0,0,1,0,1,0,0,0]
@@ -284,7 +284,7 @@ func findMinT(minT simd.Float32x8, currentMin *simd.Float32x4) bool {
 	// Check if this iteration's min is less than existing. If not we can skip
 	// running the semi-expensive code figuring out which sphere index we've
 	// intersected as closest.
-	msk := currentMin.Less(tX).AsInt32x4()
+	msk := currentMin.Less(tX).ToInt32x4()
 	if !msk.IsZero() {
 		return false
 	}
@@ -292,6 +292,97 @@ func findMinT(minT simd.Float32x8, currentMin *simd.Float32x4) bool {
 	// Current iteration has produced the lowest T (distance to intersection) yet. Assign tX to currentMin.
 	*currentMin = tX
 	return true
+}
+
+func IntersectTrianglesShadowRaySIMD(r *std.Ray, triangles *Triangles) bool {
+
+	rayOriginX := archsimd.BroadcastFloat32x8(r.Orig[0])
+	rayOriginY := archsimd.BroadcastFloat32x8(r.Orig[1])
+	rayOriginZ := archsimd.BroadcastFloat32x8(r.Orig[2])
+	rayDirectionX := archsimd.BroadcastFloat32x8(r.Dir[0])
+	rayDirectionY := archsimd.BroadcastFloat32x8(r.Dir[1])
+	rayDirectionZ := archsimd.BroadcastFloat32x8(r.Dir[2])
+
+	one := archsimd.BroadcastFloat32x8(1.0)
+
+	for i := 0; i < triangles.Count; i += 8 {
+		v0x := archsimd.LoadFloat32x8Slice(triangles.v0x[i : i+8])
+		v0y := archsimd.LoadFloat32x8Slice(triangles.v0y[i : i+8])
+		v0z := archsimd.LoadFloat32x8Slice(triangles.v0z[i : i+8])
+
+		v1x := archsimd.LoadFloat32x8Slice(triangles.v1x[i : i+8])
+		v1y := archsimd.LoadFloat32x8Slice(triangles.v1y[i : i+8])
+		v1z := archsimd.LoadFloat32x8Slice(triangles.v1z[i : i+8])
+
+		v2x := archsimd.LoadFloat32x8Slice(triangles.v2x[i : i+8])
+		v2y := archsimd.LoadFloat32x8Slice(triangles.v2y[i : i+8])
+		v2z := archsimd.LoadFloat32x8Slice(triangles.v2z[i : i+8])
+
+		// Compute the plane normal by creating two vectors from coord A to B and C, then cross product.
+		v0v1x := v1x.Sub(v0x)
+		v0v1y := v1y.Sub(v0y)
+		v0v1z := v1z.Sub(v0z)
+
+		v0v2x := v2x.Sub(v0x)
+		v0v2y := v2y.Sub(v0y)
+		v0v2z := v2z.Sub(v0z)
+
+		// Cross product
+		pVecX := rayDirectionY.Mul(v0v2z).Sub(rayDirectionZ.Mul(v0v2y))
+		pVecY := rayDirectionZ.Mul(v0v2x).Sub(rayDirectionX.Mul(v0v2z))
+		pVecZ := rayDirectionX.Mul(v0v2y).Sub(rayDirectionY.Mul(v0v2x))
+
+		// DotProduct
+		det := v0v1x.Mul(pVecX).Add(v0v1y.Mul(pVecY)).Add(v0v1z.Mul(pVecZ)) // det: 0.946111
+
+		// TODO check for parallel using abs of det close to zero
+		invDet := one.Div(det)
+
+		tvecX := rayOriginX.Sub(v0x)
+		tvecY := rayOriginY.Sub(v0y)
+		tvecZ := rayOriginZ.Sub(v0z)
+
+		u := (tvecX.Mul(pVecX).Add(tvecY.Mul(pVecY)).Add(tvecZ.Mul(pVecZ))).Mul(invDet)
+
+		// Check if all u are < 0
+		msk1 := u.Greater(zeroes)
+		msk2 := u.Less(one)
+		if msk1.ToInt32x8().IsZero() || msk2.ToInt32x8().IsZero() {
+			continue
+		}
+		// We need to mask off any u that is NOT 0 to 1
+		msk3 := msk1.And(msk2)
+		u = u.Masked(msk3)
+
+		qVecX := tvecY.Mul(v0v1z).Sub(tvecZ.Mul(v0v1y))
+		qVecY := tvecZ.Mul(v0v1x).Sub(tvecX.Mul(v0v1z))
+		qVecZ := tvecX.Mul(v0v1y).Sub(tvecY.Mul(v0v1x))
+
+		v := (rayDirectionX.Mul(qVecX).Add(rayDirectionY.Mul(qVecY)).Add(rayDirectionZ.Mul(qVecZ))).Mul(invDet)
+
+		// Get rid of negative v's
+		negativeMask := v.GreaterEqual(true0)
+
+		v = v.Merge(true0, msk3.And(negativeMask)) // Mask off any triangles with max float32 we know we cannot hit given mask from U
+		if v.NotEqual(true0).ToInt32x8().IsZero() {
+			continue
+		}
+		uv := u.Add(v)
+
+		// If ALL v's are less than zero OR ALL uv are zero or greater than one,
+		// there cannot be an intersection. Remember, IsZero() on a mask essentially says
+		// NO elements matched, so we sometimes need to "reverse" our thinking sometimes.
+
+		msk1x := v.LessEqual(true0)
+		msk2x := uv.Greater(true0).And(uv.Less(one)) // mask so if mask is zero, no uv and between zero to one
+
+		// if v < 0 || u+v > 1 {
+		if msk1x.ToInt32x8().IsZero() || msk2x.ToInt32x8().IsZero() {
+			continue
+		}
+		return true
+	}
+	return false
 }
 
 type Triangle struct {

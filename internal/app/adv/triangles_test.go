@@ -1,12 +1,21 @@
 package adv
 
 import (
+	"fmt"
+	"simd/archsimd"
 	"testing"
 
 	"github.com/eriklupander/simd-tracer/internal/app/std"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
+
+func TestMasks(t *testing.T) {
+	v1 := archsimd.LoadFloat32x4(&[4]float32{3, -1, 0, 4})
+	zero := archsimd.BroadcastFloat32x4(0.0)
+	msk := v1.Greater(zero)
+	fmt.Println(msk.ToInt32x4())
+}
 
 func TestIntersectTriangleHit(t *testing.T) {
 	ray := &std.Ray{Orig: &std.Vec4{0, 0.5, -2}, Dir: &std.Vec4{0, 0, 1}}
@@ -126,6 +135,23 @@ func TestIntersectTrianglesStackedSIMD(t *testing.T) {
 	assert.Equal(t, float32(1.0), t0)
 	assert.Equal(t, float32(0.25), u)
 	assert.Equal(t, float32(0.25), v)
+}
+
+func TestIntersectTriangleShadow(t *testing.T) {
+	// Ray from wall at 300x270 towards point light, should not intersect
+	ray := &std.Ray{Orig: &std.Vec4{2.136053, 2.6783404, -1.98}, Dir: &std.Vec4{-0.040390607, 0.80798984, 0.5878104}}
+	tris := TrianglesStacked()
+
+	hit := IntersectTrianglesShadowRaySIMD(ray, tris)
+	assert.False(t, hit)
+
+	// Ray close to the roof near light source that seems to cast gigantic shadow even though there is no triangle there
+	ray = &std.Ray{Orig: &std.Vec4{2.7929351, 5.086907, -1.98}, Dir: &std.Vec4{-0.36782667, 0.14523755, 0.9184822}}
+	hit = IntersectTrianglesShadowRaySIMD(ray, tris)
+	assert.False(t, hit)
+
+	hit = IntersectSpheresSIMDShadowRay(ray, AsStructOfArrays(std.SixteenSpheres()))
+	assert.False(t, hit)
 }
 
 func BenchmarkIntersectTriangle(b *testing.B) {

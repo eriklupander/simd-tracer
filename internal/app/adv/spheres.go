@@ -2,7 +2,7 @@ package adv
 
 import (
 	"math"
-	"simd"
+	"simd/archsimd"
 
 	"github.com/eriklupander/simd-tracer/internal/app/std"
 )
@@ -88,29 +88,31 @@ func IntersectSpheres(r *std.Ray, spheres *Spheres) (float32, int, bool) {
 	return 0.0, -1, false
 }
 
-var zeroes = simd.BroadcastFloat32x8(0.0001)
-var maxT = simd.BroadcastFloat32x8(float32(3.4028235e38))
-var firstElemSetMask = simd.LoadInt32x4(&[4]int32{-1, 0, 0, 0})
+var true0 = archsimd.BroadcastFloat32x8(0)
+var zeroes = archsimd.BroadcastFloat32x8(0.0001)
+var maxT = archsimd.BroadcastFloat32x8(float32(3.4028235e38))
+var negMaxT = archsimd.BroadcastFloat32x8(float32(-3.4028235e38))
+var firstElemSetMask = archsimd.LoadInt32x4(&[4]int32{-1, 0, 0, 0})
 
-// IntersectSpheresSIMD performs a ray-spheres intersection given the "struct of arrays" Spheres type using SIMD.
+// IntersectSpheresSIMD performs a ray-spheres intersection given the "struct of arrays" Spheres type using archsimd.
 // Note the deliberate design where the code inside the for-statement is pretty much exclusively using branchless-style
 // SIMD-only code, only using if-statements where we can exit early.
 func IntersectSpheresSIMD(r *std.Ray, spheres *Spheres) (float32, int, bool) {
-	rayOriginX := simd.BroadcastFloat32x8(r.Orig[0])
-	rayOriginY := simd.BroadcastFloat32x8(r.Orig[1])
-	rayOriginZ := simd.BroadcastFloat32x8(r.Orig[2])
-	rayDirectionX := simd.BroadcastFloat32x8(r.Dir[0])
-	rayDirectionY := simd.BroadcastFloat32x8(r.Dir[1])
-	rayDirectionZ := simd.BroadcastFloat32x8(r.Dir[2])
+	rayOriginX := archsimd.BroadcastFloat32x8(r.Orig[0])
+	rayOriginY := archsimd.BroadcastFloat32x8(r.Orig[1])
+	rayOriginZ := archsimd.BroadcastFloat32x8(r.Orig[2])
+	rayDirectionX := archsimd.BroadcastFloat32x8(r.Dir[0])
+	rayDirectionY := archsimd.BroadcastFloat32x8(r.Dir[1])
+	rayDirectionZ := archsimd.BroadcastFloat32x8(r.Dir[2])
 
-	currentMin := simd.BroadcastFloat32x4(math.MaxFloat32)
+	currentMin := archsimd.BroadcastFloat32x4(math.MaxFloat32)
 
 	currentIndex := -1
 	for i := 0; i < spheres.Count; i += 8 {
-		spheresCenterX := simd.LoadFloat32x8Slice(spheres.CenterX[i : i+8])
-		spheresCenterY := simd.LoadFloat32x8Slice(spheres.CenterY[i : i+8])
-		spheresCenterZ := simd.LoadFloat32x8Slice(spheres.CenterZ[i : i+8])
-		spheresRadiusSquared := simd.LoadFloat32x8Slice(spheres.RadiusSquared[i : i+8])
+		spheresCenterX := archsimd.LoadFloat32x8Slice(spheres.CenterX[i : i+8])
+		spheresCenterY := archsimd.LoadFloat32x8Slice(spheres.CenterY[i : i+8])
+		spheresCenterZ := archsimd.LoadFloat32x8Slice(spheres.CenterZ[i : i+8])
+		spheresRadiusSquared := archsimd.LoadFloat32x8Slice(spheres.RadiusSquared[i : i+8])
 
 		// Compute vectors from sphere center to ray origin
 		ocX := spheresCenterX.Sub(rayOriginX)
@@ -121,7 +123,7 @@ func IntersectSpheresSIMD(r *std.Ray, spheres *Spheres) (float32, int, bool) {
 		tcas := ocX.Mul(rayDirectionX).Add(ocY.Mul(rayDirectionY)).Add(ocZ.Mul(rayDirectionZ))
 
 		// If all tcas are less than zero, there cannot be any hits this iteration, continue
-		if tcas.GreaterEqual(zeroes).AsInt32x8().IsZero() {
+		if tcas.GreaterEqual(zeroes).ToInt32x8().IsZero() {
 			continue
 		}
 
@@ -136,7 +138,7 @@ func IntersectSpheresSIMD(r *std.Ray, spheres *Spheres) (float32, int, bool) {
 		d2 := lD.Sub(tcaSquared)
 
 		// Next mask, d2 must be less than sphere radius squared to be a hit. If no d2 fulfills that criteria, exit early.
-		if d2.Less(spheresRadiusSquared).AsInt32x8().IsZero() {
+		if d2.Less(spheresRadiusSquared).ToInt32x8().IsZero() {
 			continue
 		}
 
@@ -159,7 +161,7 @@ func IntersectSpheresSIMD(r *std.Ray, spheres *Spheres) (float32, int, bool) {
 		minT := t0Pos.Min(t1Pos)
 
 		// If all elements are negative, we can skip since there were no intersection.
-		if minT.Less(zeroes).AsInt32x8().IsZero() {
+		if minT.Less(zeroes).ToInt32x8().IsZero() {
 			continue
 		}
 
@@ -186,7 +188,7 @@ func IntersectSpheresSIMD(r *std.Ray, spheres *Spheres) (float32, int, bool) {
 		// Check if this iteration's min is less than existing. If not we can skip
 		// running the semi-expensive code figuring out which sphere index we've
 		// intersected as closest.
-		msk := currentMin.Less(tX).AsInt32x4()
+		msk := currentMin.Less(tX).ToInt32x4()
 		if !msk.IsZero() {
 			continue
 		}
@@ -201,8 +203,8 @@ func IntersectSpheresSIMD(r *std.Ray, spheres *Spheres) (float32, int, bool) {
 		//
 		// Example:
 		// [7,3,2,5] Equal [2,2,2,2] => mask [0,0,1,0]  (do for both hi and lo)
-		maskLo := currentMin.Equal(lo).AsInt32x4()
-		maskHi := currentMin.Equal(hi).AsInt32x4()
+		maskLo := currentMin.Equal(lo).ToInt32x4()
+		maskHi := currentMin.Equal(hi).ToInt32x4()
 
 		// Finally, figure out _which_ index in the mask(s) that has value 1.
 		currentIndex = resolveCurrentIndex(maskLo, maskHi, i, currentIndex)
@@ -243,7 +245,7 @@ func IntersectSpheresSIMD(r *std.Ray, spheres *Spheres) (float32, int, bool) {
 // The code can also be written using a for i := range 4 loop, but manually unrolling the loop improves performance. Note that
 // the best performance is obtained if the code of this function is copied directly into the intersection code (e.g. manually
 // inlined)
-func resolveCurrentIndex(maskLo simd.Int32x4, maskHi simd.Int32x4, offset, currentIndex int) int {
+func resolveCurrentIndex(maskLo archsimd.Int32x4, maskHi archsimd.Int32x4, offset, currentIndex int) int {
 
 	// Unroll #1
 	if maskLo.Xor(firstElemSetMask).IsZero() {
@@ -285,21 +287,21 @@ func resolveCurrentIndex(maskLo simd.Int32x4, maskHi simd.Int32x4, offset, curre
 	return currentIndex
 }
 
-// IntersectSpheresSIMDShadowRay performs a ray-spheres intersection given the "struct of arrays" Spheres type using SIMD.
+// IntersectSpheresSIMDShadowRay performs a ray-spheres intersection given the "struct of arrays" Spheres type using archsimd.
 func IntersectSpheresSIMDShadowRay(r *std.Ray, spheres *Spheres) bool {
-	rayOriginX := simd.BroadcastFloat32x8(r.Orig[0])
-	rayOriginY := simd.BroadcastFloat32x8(r.Orig[1])
-	rayOriginZ := simd.BroadcastFloat32x8(r.Orig[2])
-	rayDirectionX := simd.BroadcastFloat32x8(r.Dir[0])
-	rayDirectionY := simd.BroadcastFloat32x8(r.Dir[1])
-	rayDirectionZ := simd.BroadcastFloat32x8(r.Dir[2])
+	rayOriginX := archsimd.BroadcastFloat32x8(r.Orig[0])
+	rayOriginY := archsimd.BroadcastFloat32x8(r.Orig[1])
+	rayOriginZ := archsimd.BroadcastFloat32x8(r.Orig[2])
+	rayDirectionX := archsimd.BroadcastFloat32x8(r.Dir[0])
+	rayDirectionY := archsimd.BroadcastFloat32x8(r.Dir[1])
+	rayDirectionZ := archsimd.BroadcastFloat32x8(r.Dir[2])
 
 	for i := 0; i < spheres.Count; i += 8 {
 
-		spheresCenterX := simd.LoadFloat32x8Slice(spheres.CenterX[i : i+8])
-		spheresCenterY := simd.LoadFloat32x8Slice(spheres.CenterY[i : i+8])
-		spheresCenterZ := simd.LoadFloat32x8Slice(spheres.CenterZ[i : i+8])
-		spheresRadiusSquared := simd.LoadFloat32x8Slice(spheres.RadiusSquared[i : i+8])
+		spheresCenterX := archsimd.LoadFloat32x8Slice(spheres.CenterX[i : i+8])
+		spheresCenterY := archsimd.LoadFloat32x8Slice(spheres.CenterY[i : i+8])
+		spheresCenterZ := archsimd.LoadFloat32x8Slice(spheres.CenterZ[i : i+8])
+		spheresRadiusSquared := archsimd.LoadFloat32x8Slice(spheres.RadiusSquared[i : i+8])
 
 		// Compute vectors from sphere center to ray origin
 		ocX := spheresCenterX.Sub(rayOriginX)
@@ -310,7 +312,7 @@ func IntersectSpheresSIMDShadowRay(r *std.Ray, spheres *Spheres) bool {
 		tcas := ocX.Mul(rayDirectionX).Add(ocY.Mul(rayDirectionY)).Add(ocZ.Mul(rayDirectionZ))
 
 		// If no values in tcas are greater than zero, there cannot be any hits this iteration, continue
-		if tcas.GreaterEqual(zeroes).AsInt32x8().IsZero() {
+		if tcas.GreaterEqual(zeroes).ToInt32x8().IsZero() {
 			continue
 		}
 
@@ -323,7 +325,7 @@ func IntersectSpheresSIMDShadowRay(r *std.Ray, spheres *Spheres) bool {
 		d2Mask := spheresRadiusSquared.Greater(d2)
 
 		//fmt.Printf("D2Mask: %v\n", d2Mask)
-		if d2Mask.AsInt32x8().IsZero() {
+		if d2Mask.ToInt32x8().IsZero() {
 			continue
 		}
 
@@ -333,12 +335,12 @@ func IntersectSpheresSIMDShadowRay(r *std.Ray, spheres *Spheres) bool {
 		t0 := tcas.Sub(thcSqrt)
 		t1 := tcas.Add(thcSqrt)
 
-		zero := simd.BroadcastFloat32x8(0.0)
+		zero := archsimd.BroadcastFloat32x8(0.0)
 		m1 := t0.Greater(zero)
-		zero = simd.BroadcastFloat32x8(0.0)
+		zero = archsimd.BroadcastFloat32x8(0.0)
 		m2 := t1.Greater(zero)
 
-		if m1.AsInt32x8().IsZero() && m2.AsInt32x8().IsZero() {
+		if m1.ToInt32x8().IsZero() && m2.ToInt32x8().IsZero() {
 			// No intersection
 			continue
 		}
