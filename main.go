@@ -39,7 +39,7 @@ func main() {
 	for range 1 {
 		std.Render(screenWidth, screenHeight, spheres, planes, outBuf)
 	}
-	fmt.Printf("Legacy done in %v", time.Since(st))
+	fmt.Printf("Legacy done in %v\n", time.Since(st))
 
 	img := image.NewRGBA(image.Rect(0, 0, screenWidth, screenHeight))
 	img.Pix = outBuf.Bytes()
@@ -54,11 +54,11 @@ func main() {
 
 	simdSpheres := adv.AsStructOfArrays(spheres)
 	simdPlanes := adv.PlanesAsStructOfArrays(planes)
-	simdTriangles := adv.TrianglesSmallSideBySide()
+	//simdTriangles := adv.TrianglesSmallSideBySide()
 	outBuf2 := new(bytes.Buffer)
 	st2 := time.Now()
 	for range 1 {
-		adv.Render(screenWidth, screenHeight, simdSpheres, simdPlanes, simdTriangles, outBuf2)
+		adv.Render(screenWidth, screenHeight, simdSpheres, simdPlanes, &adv.Triangles{}, outBuf2)
 	}
 	fmt.Printf("SIMD done in %v", time.Since(st2))
 

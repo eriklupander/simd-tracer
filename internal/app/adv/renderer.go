@@ -10,6 +10,13 @@ import (
 var obstructedColor = std.Vec4{0, 0, 0}
 var red = std.Vec4{1, 0, 0}
 
+const (
+	IntersectTypeNone = iota
+	IntersectTypeSphere
+	IntersectTypePlane
+	IntersectTypeTriangle
+)
+
 // hard-coded make-believe sphere representing the point light.
 var light = std.Sphere{
 	Center:        &std.Vec4{2, 5.5, 0},
@@ -21,7 +28,7 @@ var light = std.Sphere{
 func Render(width, height int, spheres *Spheres, planes *Planes, triangles *Triangles, renderTo *bytes.Buffer) {
 	hitToLightDir := &std.Vec4{2, 5.4, 0}
 
-	cameraOrigin := &std.Vec4{3, 4, 30}
+	cameraOrigin := &std.Vec4{3, 4, 20}
 	lookAt := &std.Vec4{3, 4, 0}
 	up := &std.Vec4{0, 1, 0}
 	vt := std.ViewTransform(cameraOrigin, lookAt, up)
@@ -40,6 +47,7 @@ func Render(width, height int, spheres *Spheres, planes *Planes, triangles *Tria
 	var shadowRay = &std.Ray{Dir: &std.Vec4{}, Orig: &std.Vec4{}}
 	var hitPoint = &std.Vec4{}
 	var hitNormal = &std.Vec4{}
+	var intersectedType = IntersectTypeNone
 
 	for j := 0; j < height; j++ {
 		for i := 0; i < width; i++ {
@@ -55,10 +63,10 @@ func Render(width, height int, spheres *Spheres, planes *Planes, triangles *Tria
 			dir.Normalize()
 			ray.Dir = dir
 
-			//if j != 402 || i != 310 {
+			//if j != 370 || i != 150 {
 			//	continue
 			//}
-
+			//fmt.Printf("%v\n", ray.Dir)
 			minT := float32(3.4028235e38)
 			intersectedIdx := -1
 
@@ -76,7 +84,7 @@ func Render(width, height int, spheres *Spheres, planes *Planes, triangles *Tria
 			if hit {
 				intersectedIdx = planes.Count + spheres.Count + idx
 				minT = t
-
+				intersectedType = IntersectTypeTriangle
 			}
 
 			// Perform ray-plane intersection testing.
@@ -84,6 +92,7 @@ func Render(width, height int, spheres *Spheres, planes *Planes, triangles *Tria
 			if hit && t < minT {
 				intersectedIdx = spheres.Count + idx
 				minT = t
+				intersectedType = IntersectTypePlane
 			}
 
 			// Perform ray-sphere intersection testing.
@@ -91,6 +100,7 @@ func Render(width, height int, spheres *Spheres, planes *Planes, triangles *Tria
 			if hit && t < minT {
 				intersectedIdx = idx
 				minT = t
+				intersectedType = IntersectTypeSphere
 			}
 
 			// The code below is absolutely horrific, it needs a severe clean-up and a more uniform handling of ray/sphere/light and
@@ -113,32 +123,36 @@ func Render(width, height int, spheres *Spheres, planes *Planes, triangles *Tria
 				// that obstructed the ray to the light source.
 				//fmt.Printf("Orig: %v,%v,%v\n", shadowRay.Orig[0], shadowRay.Orig[1], shadowRay.Orig[2])
 				//fmt.Printf("Dir  :%v,%v,%v\n", shadowRay.Dir[0], shadowRay.Dir[1], shadowRay.Dir[2])
-				obstructed := IntersectSpheresSIMDShadowRay(shadowRay, spheres) || IntersectTrianglesShadowRaySIMD(shadowRay, triangles)
+				obstructed := IntersectSpheresSIMDShadowRay(shadowRay, spheres) //|| IntersectTrianglesShadowRaySIMD(shadowRay, triangles)
 
 				// Compute final pixel color. Uses a hideous trick to discern spheres from planes by offsetting
 				// plane intersection index (intersectedIdx) with the number of spheres.
 				if obstructed {
 					fract = 0.0
 					color = obstructedColor
-				} else if intersectedIdx < spheres.Count {
-					// Sphere
-					std.Sub(hitPoint, &std.Vec4{spheres.CenterX[intersectedIdx], spheres.CenterY[intersectedIdx], spheres.CenterZ[intersectedIdx], 0}, hitNormal)
-					hitNormal.Normalize()
-
-					normalToReverseCamera := hitNormal[0]*-ray.Dir[0] + hitNormal[1]*-ray.Dir[1] + hitNormal[2]*-ray.Dir[2]
-					fract = max(0.0, normalToReverseCamera)
-					color = spheres.Color[intersectedIdx]
-				} else if intersectedIdx < triangles.Count+spheres.Count {
-					// Plane
-					planeIdx := intersectedIdx - spheres.Count
-					planeNormal := std.Vec4{planes.NormalX[planeIdx], planes.NormalY[planeIdx], planes.NormalZ[planeIdx], 0}
-					normalToReverseCamera := planeNormal[0]*-ray.Dir[0] + planeNormal[1]*-ray.Dir[1] + planeNormal[2]*-ray.Dir[2]
-					fract = max(0.0, normalToReverseCamera)
-					color = planes.Color[planeIdx]
 				} else {
-					// Triangle
-					color = std.Vec4{1.0 * u, 1.0 * v, 1.0 * u * v, 1.0}
-					fract = 1.0
+					switch intersectedType {
+					case IntersectTypeSphere:
+						std.Sub(hitPoint, &std.Vec4{spheres.CenterX[intersectedIdx], spheres.CenterY[intersectedIdx], spheres.CenterZ[intersectedIdx], 0}, hitNormal)
+						hitNormal.Normalize()
+
+						normalToReverseCamera := hitNormal[0]*-ray.Dir[0] + hitNormal[1]*-ray.Dir[1] + hitNormal[2]*-ray.Dir[2]
+						fract = max(0.0, normalToReverseCamera)
+						color = spheres.Color[intersectedIdx]
+					case IntersectTypePlane:
+						// Plane
+						planeIdx := intersectedIdx - spheres.Count
+						planeNormal := std.Vec4{planes.NormalX[planeIdx], planes.NormalY[planeIdx], planes.NormalZ[planeIdx], 0}
+						normalToReverseCamera := planeNormal[0]*-ray.Dir[0] + planeNormal[1]*-ray.Dir[1] + planeNormal[2]*-ray.Dir[2]
+						fract = max(0.0, normalToReverseCamera)
+						color = planes.Color[planeIdx]
+					case IntersectTypeTriangle:
+						// Triangle
+						color = std.Vec4{1.0 * u, 1.0 * v, 1.0 * u * v, 1.0}
+						fract = 1.0
+					default:
+						// No intersection
+					}
 				}
 
 				// Render RGBA for current pixel in one go. fract is multiplied by 255 so it can be stuffed directly into

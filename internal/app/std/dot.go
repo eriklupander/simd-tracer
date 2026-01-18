@@ -114,9 +114,9 @@ func DotProductSIMD2x4(v1, v2 []float32) (float32, float32) {
 	r2 := archsimd.LoadFloat32x8((*[8]float32)(v2)) // [3,4,5,6,3,4,5,7]
 
 	sumdst := archsimd.Float32x8{}
-	sumdst = r1.MulAdd(r2, sumdst)   // => [6,12,20,30,6,12,20,35]
-	sumdst = sumdst.AddPairs(sumdst) // => [18,50,18,50,18,55,18,55]
-	sumdst = sumdst.AddPairs(sumdst) // => [68,68,68,68,73,73,73,73]
+	sumdst = r1.MulAdd(r2, sumdst)          // => [6,12,20,30,6,12,20,35]
+	sumdst = sumdst.AddPairsGrouped(sumdst) // => [18,50,18,50,18,55,18,55]
+	sumdst = sumdst.AddPairsGrouped(sumdst) // => [68,68,68,68,73,73,73,73]
 	out := [8]float32{}
 	sumdst.Store(&out)
 
@@ -128,9 +128,9 @@ func DotProductSIMD2x4(v1, v2 []float32) (float32, float32) {
 func DotProductSIMD2x4FromFloat32x8(r1, r2 archsimd.Float32x8) (float32, float32) {
 
 	sumdst := archsimd.Float32x8{}
-	sumdst = r1.MulAdd(r2, sumdst)   // => [6,12,20,30,6,12,20,35]
-	sumdst = sumdst.AddPairs(sumdst) // => [18,50,18,50,18,55,18,55]
-	sumdst = sumdst.AddPairs(sumdst) // => [68,68,68,68,73,73,73,73]
+	sumdst = r1.MulAdd(r2, sumdst)          // => [6,12,20,30,6,12,20,35]
+	sumdst = sumdst.AddPairsGrouped(sumdst) // => [18,50,18,50,18,55,18,55]
+	sumdst = sumdst.AddPairsGrouped(sumdst) // => [68,68,68,68,73,73,73,73]
 	out := [8]float32{}
 	sumdst.Store(&out)
 
@@ -145,9 +145,9 @@ func DotProductSIMD2x4HiLo(v1, v2 []float32) (float32, float32) {
 	r2 := archsimd.LoadFloat32x8((*[8]float32)(v2))
 
 	sumdst := archsimd.Float32x8{}
-	sumdst = r1.MulAdd(r2, sumdst)   // => [6,12,20,30,6,12,20,35]
-	sumdst = sumdst.AddPairs(sumdst) // => [18,50,18,50,18,55,18,55]
-	sumdst = sumdst.AddPairs(sumdst) // => [68,68,68,68,73,73,73,73]
+	sumdst = r1.MulAdd(r2, sumdst)          // => [6,12,20,30,6,12,20,35]
+	sumdst = sumdst.AddPairsGrouped(sumdst) // => [18,50,18,50,18,55,18,55]
+	sumdst = sumdst.AddPairsGrouped(sumdst) // => [68,68,68,68,73,73,73,73]
 	lo := sumdst.GetLo()
 	hi := sumdst.GetHi()
 
@@ -169,8 +169,8 @@ func DotAVX256a(x []float32, y []float32) float32 {
 	xv := archsimd.LoadFloat32x8SlicePart(x[i:])
 	yv := archsimd.LoadFloat32x8SlicePart(y[i:])
 	a = yv.MulAdd(xv, a)
-	a = a.AddPairs(a) // 01234567                AP 01234567                -> 0+1 2+3 _ _ 4+5 6+7 _ _
-	a = a.AddPairs(a) // 0+1 2+3 _ _ 4+5 6+7 _ _ AP 0+1 2+3 _ _ 4+5 6+7 _ _ -> 0+1+2+3 _ _ _ 4+5+6+7 _ _ _
+	a = a.AddPairsGrouped(a) // 01234567                AP 01234567                -> 0+1 2+3 _ _ 4+5 6+7 _ _
+	a = a.AddPairsGrouped(a) // 0+1 2+3 _ _ 4+5 6+7 _ _ AP 0+1 2+3 _ _ 4+5 6+7 _ _ -> 0+1+2+3 _ _ _ 4+5+6+7 _ _ _
 	b := a.GetLo().Add(a.GetHi())
 	return b.GetElem(0)
 }

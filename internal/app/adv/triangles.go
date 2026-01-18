@@ -97,7 +97,7 @@ func IntersectTriangle(ray *std.Ray, v0, v1, v2 *std.Vec4) (float32, int, bool) 
 	return t, 0, true // The ray hits the triangle
 }
 
-// IntersectTriangleMT implements Möller-Trumbore ray/triangle intersection (Converetd into Go from scratchapixel.com)
+// IntersectTriangleMT implements Möller-Trumbore ray/triangle intersection (Converted into Go from scratchapixel.com)
 func IntersectTriangleMT(ray *std.Ray, v0, v1, v2 *std.Vec4, idx int) (float32, float32, float32, int, bool) {
 
 	// Compute the plane's normal
@@ -140,7 +140,9 @@ func IntersectTriangleMT(ray *std.Ray, v0, v1, v2 *std.Vec4, idx int) (float32, 
 }
 
 func IntersectTrianglesSIMD(r *std.Ray, triangles *Triangles) (float32, float32, float32, int, bool) {
-
+	if triangles == nil {
+		return 0, 0, 0, -1, false
+	}
 	rayOriginX := archsimd.BroadcastFloat32x8(r.Orig[0])
 	rayOriginY := archsimd.BroadcastFloat32x8(r.Orig[1])
 	rayOriginZ := archsimd.BroadcastFloat32x8(r.Orig[2])
@@ -295,7 +297,9 @@ func findMinT(minT archsimd.Float32x8, currentMin *archsimd.Float32x4) bool {
 }
 
 func IntersectTrianglesShadowRaySIMD(r *std.Ray, triangles *Triangles) bool {
-
+	if triangles == nil {
+		return false
+	}
 	rayOriginX := archsimd.BroadcastFloat32x8(r.Orig[0])
 	rayOriginY := archsimd.BroadcastFloat32x8(r.Orig[1])
 	rayOriginZ := archsimd.BroadcastFloat32x8(r.Orig[2])

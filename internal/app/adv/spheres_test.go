@@ -8,6 +8,28 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
+func TestScalarBitMasks(t *testing.T) {
+	currentMask := 0b01000000
+
+	t.Logf("%08b", currentMask)
+	t.Logf("%v", currentMask|0b0000 == 0)
+	t.Logf("%v", currentMask&0b1111 != 0)
+	t.Logf("%v", currentMask^0b0000 == 0)
+
+	currentMask = 0b00000010
+	t.Logf("%08b", currentMask)
+	t.Logf("%v", currentMask|0b0000 == 0)
+	t.Logf("%v", currentMask&0b1111 != 0)
+	t.Logf("%v", currentMask^0b0000 == 0)
+}
+
+func TestResolveCurrentIndexForLoop(t *testing.T) {
+	lo := archsimd.LoadInt32x4(&[4]int32{0, 0, -1, 0})
+	hi := archsimd.LoadInt32x4(&[4]int32{0, 0, 0, 0})
+	index := resolveCurrentIndexForLoop(lo, hi, 32, -1)
+	assert.Equal(t, 34, index)
+}
+
 func TestShadowRayNoIntersection(t *testing.T) {
 
 	dir := &std.Vec4{0.45754904, 0.50628257, -0.7309766, 0}
@@ -67,6 +89,7 @@ func TestIntersectSpheres(t *testing.T) {
 	assert.InEpsilon(t, 17, t0, 0.1)
 }
 
+// Hit sphere index 5
 func TestIntersectSpheresSIMD(t *testing.T) {
 	ray := &std.Ray{
 		Orig: &std.Vec4{3, 4, 20, 0},
@@ -75,6 +98,35 @@ func TestIntersectSpheresSIMD(t *testing.T) {
 
 	spheres := AsStructOfArrays(std.SixteenSpheres())
 	t0, hitIndex, hit := IntersectSpheresSIMD(ray, spheres)
+
+	assert.True(t, hit)
+	assert.Equal(t, 5, hitIndex)
+	assert.InEpsilon(t, 17, t0, 0.1)
+}
+
+// Hit sphere index 1
+func TestIntersectSpheresHitLowIndexSIMD(t *testing.T) {
+	ray := &std.Ray{
+		Orig: &std.Vec4{3, 4, 20, 0},
+		Dir:  &std.Vec4{-0.3130755, -0.24104044, -0.91863114, 0},
+	}
+
+	spheres := AsStructOfArrays(std.SixteenSpheres())
+	t0, hitIndex, hit := IntersectSpheresSIMD(ray, spheres)
+
+	assert.True(t, hit)
+	assert.Equal(t, 1, hitIndex)
+	assert.InEpsilon(t, 17, t0, 0.1)
+}
+
+func TestIntersectSpheresSIMDMinIndexScalar(t *testing.T) {
+	ray := &std.Ray{
+		Orig: &std.Vec4{3, 4, 20, 0},
+		Dir:  &std.Vec4{-0.16645914, -0.24594483, -0.95488346, 0},
+	}
+
+	spheres := AsStructOfArrays(std.SixteenSpheres())
+	t0, hitIndex, hit := IntersectSpheresSIMDMinIndexScalar(ray, spheres)
 
 	assert.True(t, hit)
 	assert.Equal(t, 5, hitIndex)
@@ -111,6 +163,43 @@ func Benchmark16IntersectSpheresSIMD(b *testing.B) {
 	spheres := AsStructOfArrays(std.SixteenSpheres())
 	for b.Loop() {
 		_, _, _ = IntersectSpheresSIMD(ray, spheres)
+	}
+}
+
+func Benchmark16IntersectSpheresSIMDMinIndexScalar(b *testing.B) {
+	ray := &std.Ray{
+		Orig: &std.Vec4{3, 4, 20, 0},
+		Dir:  &std.Vec4{-0.16645914, -0.24594483, -0.95488346, 0},
+	}
+	spheres := AsStructOfArrays(std.SixteenSpheres())
+	for b.Loop() {
+		_, _, _ = IntersectSpheresSIMDMinIndexScalar(ray, spheres)
+	}
+}
+
+func BenchmarkSTDIntersectSpheres(b *testing.B) {
+	spheres := std.SixteenSpheres()
+	ray := &std.Ray{
+		Orig: &std.Vec4{3.1, 4.1, 20.1, 0},
+		Dir:  &std.Vec4{-0.47163668, 0.25912055, -0.8428614, 0},
+	}
+	for b.Loop() {
+		for _, s := range spheres {
+			_, _ = std.IntersectSphere(ray, s.Center, s.RadiusSquared)
+		}
+	}
+}
+
+func BenchmarkSTDIntersectSpheresSIMD(b *testing.B) {
+	spheres := std.SixteenSpheres()
+	ray := &std.Ray{
+		Orig: &std.Vec4{3.1, 4.1, 20.1, 0},
+		Dir:  &std.Vec4{-0.47163668, 0.25912055, -0.8428614, 0},
+	}
+	for b.Loop() {
+		for _, s := range spheres {
+			_, _ = std.IntersectSphereSIMD(ray, s.Center, s.RadiusSquared)
+		}
 	}
 }
 

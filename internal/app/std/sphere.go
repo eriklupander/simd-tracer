@@ -27,7 +27,7 @@ func IntersectSphere(ray *Ray, center *Vec4, radiusSquared float32) (float32, bo
 		return 0.0, false
 	}
 
-	// Compute distance to hit point.
+	// Compute distance to hit points. (Enter and Exit sphere)
 	thc := float32(math.Sqrt(float64(radiusSquared - d2)))
 	t0 := tca - thc
 	t1 := tca + thc
@@ -48,10 +48,7 @@ func IntersectSphere(ray *Ray, center *Vec4, radiusSquared float32) (float32, bo
 	if t0 < 0 {
 		return 0.0, false
 	}
-
-	t := t0
-
-	return t, true
+	return t0, true
 }
 
 // IntersectSphereSIMD performs a ray-sphere intersection using DotProductSIMDVec4.
