@@ -2,9 +2,11 @@ package main
 
 import (
 	"bytes"
+	"flag"
 	"fmt"
 	"image"
 	"image/png"
+	"log/slog"
 	"os"
 	"runtime/pprof"
 	"time"
@@ -13,35 +15,64 @@ import (
 	"github.com/eriklupander/simd-tracer/internal/app/std"
 )
 
-// Change to get a long-running main suitable for profiling.
-const iterations = 1
-
 // If changed to true, CPU profiling is enabled.
 const enablePprof = false
 
-const (
-	screenWidth  = 640
-	screenHeight = 480
-)
-
 func main() {
+	var width, height, iterations int
+	var outFile string
+	flag.IntVar(&width, "width", 1024, "output image width in pixels")
+	flag.IntVar(&height, "height", 768, "output image height in pixels")
+	flag.IntVar(&iterations, "iterations", 1, "Number of times to render image, useful when running the profiler over extended periods of time")
+	flag.StringVar(&outFile, "out", "out2.png", "output file name")
+	flag.Parse()
+
 	if enablePprof {
 		cleanFn := enableProfiling()
 		defer cleanFn()
 	}
 
+	// Build scene objects
 	spheres := std.SixteenSpheres()
 	planes := std.CornellBox()
+
+	// Transform plain slices to Struct of Arrays format.
+	simdSpheres := adv.AsStructOfArrays(spheres)
+	simdPlanes := adv.PlanesAsStructOfArrays(planes)
+	//simdTriangles := adv.TrianglesSmallSideBySide()
+	
+	outBuf := new(bytes.Buffer)
+	st := time.Now()
+	for range iterations {
+		adv.Render(width, height, simdSpheres, simdPlanes, &adv.Triangles{}, outBuf)
+	}
+	fmt.Printf("SIMD done in %v", time.Since(st))
+
+	img := image.NewRGBA(image.Rect(0, 0, width, height))
+	img.Pix = outBuf.Bytes()
+	file, err := os.OpenFile(outFile, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0600)
+	if err != nil {
+		slog.Error("Error opening output file", slog.Any("error", err))
+		os.Exit(1)
+	}
+	defer file.Close()
+	if err := png.Encode(file, img); err != nil {
+		slog.Error("Error encoding image buffer to PNG", slog.Any("error", err))
+		os.Exit(1)
+	}
+}
+
+func renderLegacy(width, height int, spheres []std.Sphere, planes []std.Plane) {
 
 	outBuf := new(bytes.Buffer)
 
 	st := time.Now()
 	for range 1 {
-		std.Render(screenWidth, screenHeight, spheres, planes, outBuf)
+		std.Render(width, height, spheres, planes, outBuf)
 	}
 	fmt.Printf("Legacy done in %v\n", time.Since(st))
 
-	img := image.NewRGBA(image.Rect(0, 0, screenWidth, screenHeight))
+	img := image.NewRGBA(image.Rect(0, 0, width, height))
 	img.Pix = outBuf.Bytes()
 	f, err := os.OpenFile("out1.png", os.O_WRONLY|os.O_CREATE, 0600)
 	if err != nil {
@@ -52,26 +83,6 @@ func main() {
 	}
 	_ = f.Close()
 
-	simdSpheres := adv.AsStructOfArrays(spheres)
-	simdPlanes := adv.PlanesAsStructOfArrays(planes)
-	//simdTriangles := adv.TrianglesSmallSideBySide()
-	outBuf2 := new(bytes.Buffer)
-	st2 := time.Now()
-	for range 1 {
-		adv.Render(screenWidth, screenHeight, simdSpheres, simdPlanes, &adv.Triangles{}, outBuf2)
-	}
-	fmt.Printf("SIMD done in %v", time.Since(st2))
-
-	img2 := image.NewRGBA(image.Rect(0, 0, screenWidth, screenHeight))
-	img2.Pix = outBuf2.Bytes()
-	f2, err := os.OpenFile("out2.png", os.O_WRONLY|os.O_CREATE, 0600)
-	if err != nil {
-		panic(err)
-	}
-	if err := png.Encode(f2, img2); err != nil {
-		panic(err.Error())
-	}
-	_ = f2.Close()
 }
 
 func enableProfiling() func() {
@@ -79,6 +90,6 @@ func enableProfiling() func() {
 	if err != nil {
 		panic(err.Error())
 	}
-	pprof.StartCPUProfile(f2)
+	_ = pprof.StartCPUProfile(f2)
 	return pprof.StopCPUProfile
 }
