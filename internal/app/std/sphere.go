@@ -232,4 +232,6 @@ type Sphere struct {
 	Radius        float32
 	RadiusSquared float32
 	Color         Vec4
+	Emissive      bool
+	Intensity     float64
 }

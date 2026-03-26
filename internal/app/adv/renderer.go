@@ -1,3 +1,5 @@
+//go:build goexperiment.simd && amd64
+
 package adv
 
 import (
@@ -8,7 +10,6 @@ import (
 )
 
 var obstructedColor = std.Vec4{0, 0, 0}
-var red = std.Vec4{1, 0, 0}
 
 const (
 	IntersectTypeNone = iota
@@ -25,153 +26,119 @@ var light = std.Sphere{
 	Color:         std.Vec4{1, 1, 1},
 }
 
-func Render(width, height int, spheres *Spheres, planes *Planes, triangles *Triangles, renderTo *bytes.Buffer) {
+// hitResult holds the outcome of closest-intersection testing for a single ray.
+// idx is the raw index within the primitive's own slice — no offset encoding.
+type hitResult struct {
+	t    float32
+	idx  int
+	kind int     // IntersectType*
+	u, v float32 // barycentric coords, used for triangles
+}
+
+func Render(width, height int, spheres *Spheres, planes *Planes, triangles *Triangles, lightSamples int, renderTo *bytes.Buffer) {
 	hitToLightDir := &std.Vec4{2, 5.4, 0}
 
 	cameraOrigin := &std.Vec4{3, 4, 20}
 	lookAt := &std.Vec4{3, 4, 0}
 	up := &std.Vec4{0, 1, 0}
 	vt := std.ViewTransform(cameraOrigin, lookAt, up)
-	cameraToWorld := std.Inverse(vt)             // the inverse view-transform matrix is used in actual rendering.
-	cameraToWorld = std.Transpose(cameraToWorld) // convert to column-major
+	cameraToWorld := std.Inverse(vt)
+	cameraToWorld = std.Transpose(cameraToWorld)
 
 	fov := 51.52
 	scale := float32(math.Tan(deg2rad(fov * 0.5)))
 	imageAspectRatio := float32(width) / float32(height)
 
-	// Transform the ray origin to world-space
 	var orig = cameraToWorld.MulVec(std.Vec4{0, 0, 0})
-
 	var ray = &std.Ray{Orig: &orig}
 	var dir = &std.Vec4{}
 	var shadowRay = &std.Ray{Dir: &std.Vec4{}, Orig: &std.Vec4{}}
 	var hitPoint = &std.Vec4{}
 	var hitNormal = &std.Vec4{}
-	var intersectedType = IntersectTypeNone
 
 	for j := 0; j < height; j++ {
+
+		y := (1 - 2*(float32(j)+0.5)/float32(height)) * scale
+
 		for i := 0; i < width; i++ {
 
-			// Useful to troubleshoot / debug a single pixel.
-
-			// Compute x and y components of ray direction given pixel coords.
 			x := (2*(float32(i)+0.5)/float32(width) - 1) * imageAspectRatio * scale
-			y := (1 - 2*(float32(j)+0.5)/float32(height)) * scale // Optimize: This can be moved to before the inner for-loop
 
-			// Transform the ray direction using the camera-to-world matrix.
 			cameraToWorld.MulDirScalar(x, y, -1, dir)
 			dir.Normalize()
 			ray.Dir = dir
 
-			//if j != 370 || i != 150 {
-			//	continue
-			//}
-			//fmt.Printf("%v\n", ray.Dir)
-			minT := float32(3.4028235e38)
-			intersectedIdx := -1
-
-			// Perform ray-triangle intersection testing.
-			//tris := triangles.ToSlice()
-			//for idx, tri := range tris {
-			//	t, _, hit := IntersectTriangle(ray, tri.v0, tri.v1, tri.v2)
-			//	if hit && t < minT {
-			//		intersectedIdx = planes.Count + spheres.Count + idx
-			//		minT = t
-			//	}
-			//}
-
-			t, u, v, idx, hit := IntersectTrianglesSIMD(ray, triangles)
-			if hit {
-				intersectedIdx = planes.Count + spheres.Count + idx
-				minT = t
-				intersectedType = IntersectTypeTriangle
-			}
-
-			// Perform ray-plane intersection testing.
-			t, idx, hit = IntersectPlanesSIMD(ray, planes)
-			if hit && t < minT {
-				intersectedIdx = spheres.Count + idx
-				minT = t
-				intersectedType = IntersectTypePlane
-			}
-
-			// Perform ray-sphere intersection testing.
-			t, idx, hit = IntersectSpheresSIMD(ray, spheres)
-			if hit && t < minT {
-				intersectedIdx = idx
-				minT = t
-				intersectedType = IntersectTypeSphere
-			}
-
-			// The code below is absolutely horrific, it needs a severe clean-up and a more uniform handling of ray/sphere/light and
-			// shadow rays.
-			if intersectedIdx > -1 {
-				// Compute point of hit
-				std.AddMulVec4(ray.Orig, ray.Dir, minT, hitPoint)
-
-				var fract float32
-				var color std.Vec4
-
-				// cast a shadow ray against point light (represented by white sphere)
-				computeShadowRay(hitToLightDir, hitPoint, shadowRay)
-
-				// For shadows, first compute hit normal and then check if it is facing away from the light source
-				var obstructed = false
-				if intersectedType == IntersectTypeSphere {
-					std.Sub(hitPoint, &std.Vec4{spheres.CenterX[intersectedIdx], spheres.CenterY[intersectedIdx], spheres.CenterZ[intersectedIdx], 0}, hitNormal)
-					hitNormal.Normalize()
-					if hitNormal.DotProduct(shadowRay.Dir) <= 0 {
-						obstructed = true
-					}
-				}
-
-				// In our cornell box, the planes cannot cast shadows anyway, so just try to intersect spheres occluding
-				// the path to the point light.
-
-				// Check first if self-shadowed, no need to perform expensive shadow ray casting if intersected point is
-				// pointing away from direction of point light source.
-				if !obstructed {
-					obstructed = IntersectSpheresSIMDShadowRay(shadowRay, spheres)
-				}
-
-				// Compute final pixel color. Uses a hideous trick to discern spheres from planes and triangles by offsetting
-				// the intersection index (intersectedIdx) with the number of spheres and/or triangles.
-				if obstructed {
-					fract = 0.0
-					color = obstructedColor
-				} else {
-					switch intersectedType {
-					case IntersectTypeSphere:
-						// Note: Hit normal already computed.
-
-						normalToReverseCamera := hitNormal[0]*-ray.Dir[0] + hitNormal[1]*-ray.Dir[1] + hitNormal[2]*-ray.Dir[2]
-						fract = max(0.0, normalToReverseCamera)
-						color = spheres.Color[intersectedIdx]
-					case IntersectTypePlane:
-						// Plane
-						planeIdx := intersectedIdx - spheres.Count
-						planeNormal := std.Vec4{planes.NormalX[planeIdx], planes.NormalY[planeIdx], planes.NormalZ[planeIdx], 0}
-						normalToReverseCamera := planeNormal[0]*-ray.Dir[0] + planeNormal[1]*-ray.Dir[1] + planeNormal[2]*-ray.Dir[2]
-						fract = max(0.0, normalToReverseCamera)
-						color = planes.Color[planeIdx]
-					case IntersectTypeTriangle:
-						// Triangle. Note that this is just placeholder/boilerplate.
-						color = std.Vec4{1.0 * u, 1.0 * v, 1.0 * u * v, 1.0}
-						fract = 1.0
-					default:
-						// No intersection
-					}
-				}
-
-				// Render RGBA for current pixel in one go. fract is multiplied by 255 so it can be stuffed directly into
-				// the output buffer as uint8.
-				finalFract := fract * 255
-				renderTo.Write([]byte{byte(color[0] * finalFract), byte(color[1] * finalFract), byte(color[2] * finalFract), 0xFF})
-			} else {
-				// RGBA, no transparency.
+			hit := findClosestHit(ray, spheres, planes, triangles)
+			if hit.kind == IntersectTypeNone {
 				renderTo.Write([]byte{0x00, 0x00, 0x00, 0xFF})
+				continue
 			}
+
+			std.AddMulVec4(ray.Orig, ray.Dir, hit.t, hitPoint)
+
+			// Surface normal is needed before the shadow test for spheres (N·L self-shadow check).
+			if hit.kind == IntersectTypeSphere {
+				std.Sub(hitPoint, &std.Vec4{spheres.CenterX[hit.idx], spheres.CenterY[hit.idx], spheres.CenterZ[hit.idx], 0}, hitNormal)
+				hitNormal.Normalize()
+			}
+
+			computeShadowRay(hitToLightDir, hitPoint, shadowRay)
+
+			var color std.Vec4
+			var fract float32
+			if isObstructed(hit, shadowRay, hitNormal, spheres) {
+				color = obstructedColor
+			} else {
+				color, fract = shade(hit, ray, hitNormal, spheres, planes)
+			}
+
+			finalFract := fract * 255
+			renderTo.Write([]byte{byte(color[0] * finalFract), byte(color[1] * finalFract), byte(color[2] * finalFract), 0xFF})
 		}
+	}
+}
+
+// findClosestHit runs all three intersection tests and returns the nearest hit.
+func findClosestHit(ray *std.Ray, spheres *Spheres, planes *Planes, triangles *Triangles) hitResult {
+	result := hitResult{t: math.MaxFloat32, kind: IntersectTypeNone}
+
+	if t, u, v, idx, hit := IntersectTrianglesSIMD(ray, triangles); hit {
+		result = hitResult{t: t, idx: idx, kind: IntersectTypeTriangle, u: u, v: v}
+	}
+	if t, idx, hit := IntersectPlanesSIMD(ray, planes); hit && t < result.t {
+		result = hitResult{t: t, idx: idx, kind: IntersectTypePlane}
+	}
+	if t, idx, hit := IntersectSpheresSIMD(ray, spheres); hit && t < result.t {
+		result = hitResult{t: t, idx: idx, kind: IntersectTypeSphere}
+	}
+
+	return result
+}
+
+// isObstructed returns true if the path to the light is blocked.
+// For sphere hits, a N·L ≤ 0 check short-circuits the more expensive SIMD shadow ray test.
+func isObstructed(hit hitResult, shadowRay *std.Ray, hitNormal *std.Vec4, spheres *Spheres) bool {
+	if hit.kind == IntersectTypeSphere && hitNormal.DotProduct(shadowRay.Dir) <= 0 {
+		return true
+	}
+	return IntersectSpheresSIMDShadowRay(shadowRay, spheres)
+}
+
+// shade computes the surface color and brightness fraction for an unobstructed hit.
+func shade(hit hitResult, ray *std.Ray, hitNormal *std.Vec4, spheres *Spheres, planes *Planes) (std.Vec4, float32) {
+	switch hit.kind {
+	case IntersectTypeSphere:
+		fract := max(0.0, hitNormal[0]*-ray.Dir[0]+hitNormal[1]*-ray.Dir[1]+hitNormal[2]*-ray.Dir[2])
+		return spheres.Color[hit.idx], fract
+
+	case IntersectTypePlane:
+		fract := max(0.0, planes.NormalX[hit.idx]*-ray.Dir[0]+planes.NormalY[hit.idx]*-ray.Dir[1]+planes.NormalZ[hit.idx]*-ray.Dir[2])
+		return planes.Color[hit.idx], fract
+
+	case IntersectTypeTriangle:
+		return std.Vec4{hit.u, hit.v, hit.u * hit.v, 1.0}, 1.0
+	default:
+		return obstructedColor, 0
 	}
 }
 
@@ -179,7 +146,7 @@ func computeShadowRay(hitToLightDir *std.Vec4, hitPoint *std.Vec4, shadowRay *st
 	std.Sub(hitToLightDir, hitPoint, shadowRay.Dir)
 
 	shadowRay.Orig = &std.Vec4{}
-	shadowRay.Orig[0] = hitPoint[0] + shadowRay.Dir[0]*0.01 // Translate by epsilon along shadow Dir
+	shadowRay.Orig[0] = hitPoint[0] + shadowRay.Dir[0]*0.01
 	shadowRay.Orig[1] = hitPoint[1] + shadowRay.Dir[1]*0.01
 	shadowRay.Orig[2] = hitPoint[2] + shadowRay.Dir[2]*0.01
 

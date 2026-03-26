@@ -25,6 +25,9 @@ func main() {
 	flag.IntVar(&height, "height", 768, "output image height in pixels")
 	flag.IntVar(&iterations, "iterations", 1, "Number of times to render image, useful when running the profiler over extended periods of time")
 	flag.StringVar(&outFile, "out", "out2.png", "output file name")
+
+	var lightSamples int
+	flag.IntVar(&lightSamples, "light-samples", 1, "number of random samples per light source for soft shadow computation")
 	flag.Parse()
 
 	if enablePprof {
@@ -44,7 +47,7 @@ func main() {
 	outBuf := new(bytes.Buffer)
 	st := time.Now()
 	for range iterations {
-		adv.Render(width, height, simdSpheres, simdPlanes, &adv.Triangles{}, outBuf)
+		adv.Render(width, height, simdSpheres, simdPlanes, &adv.Triangles{}, lightSamples, outBuf)
 	}
 	fmt.Printf("SIMD done in %v", time.Since(st))
 
