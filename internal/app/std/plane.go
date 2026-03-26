@@ -1,9 +1,9 @@
 package std
 
 type Plane struct {
-	Point  *Vec4
-	Normal *Vec4
-	Color  Vec4
+	Point    *Vec4
+	Normal   *Vec4
+	Material Material
 }
 
 // From https://lousodrome.net/blog/light/2020/07/03/intersection-of-a-ray-and-a-plane/

@@ -505,7 +505,7 @@ func AsStructOfArrays(spheres []std.Sphere) *Spheres {
 		sp.CenterY[i] = s.Center[1]
 		sp.CenterZ[i] = s.Center[2]
 		sp.RadiusSquared[i] = s.RadiusSquared
-		sp.Color[i] = s.Color
+		sp.Color[i] = s.Material.Color
 	}
 	return sp
 }

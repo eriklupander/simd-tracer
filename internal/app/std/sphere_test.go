@@ -74,7 +74,7 @@ func BenchmarkIntersectSingleSphere(b *testing.B) {
 	s := Sphere{
 		Center:        &Vec4{0, 3, 0, 0},
 		RadiusSquared: 1,
-		Color:         Vec4{0, 1, 1},
+		Material:      Material{Color: Vec4{0, 1, 1}},
 	}
 	ray := &Ray{
 		Orig: &Vec4{3.1, 4.1, 20.1, 0},

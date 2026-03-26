@@ -46,8 +46,9 @@ func main() {
 
 	outBuf := new(bytes.Buffer)
 	st := time.Now()
+	lights := std.Lights()
 	for range iterations {
-		adv.Render(width, height, simdSpheres, simdPlanes, &adv.Triangles{}, lightSamples, outBuf)
+		adv.Render(width, height, simdSpheres, simdPlanes, &adv.Triangles{}, lights, lightSamples, outBuf)
 	}
 	fmt.Printf("SIMD done in %v", time.Since(st))
 

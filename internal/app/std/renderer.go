@@ -12,7 +12,7 @@ var light = Sphere{
 	Center:        &Vec4{2, 5.5, 0},
 	Radius:        2,
 	RadiusSquared: 4,
-	Color:         Vec4{1, 1, 1},
+	Material:      Material{Color: Vec4{1, 1, 1}},
 }
 
 func Render(width, height int, spheres []Sphere, planes []Plane, renderTo *bytes.Buffer) {
@@ -123,17 +123,17 @@ func Render(width, height int, spheres []Sphere, planes []Plane, renderTo *bytes
 
 					normalToReverseCamera := hitNormal[0]*-ray.Dir[0] + hitNormal[1]*-ray.Dir[1] + hitNormal[2]*-ray.Dir[2]
 					fract = max(0.0, normalToReverseCamera)
-					color = spheres[intersectedIdx].Color
+					color = spheres[intersectedIdx].Material.Color
 				} else if intersectedIdx == 1000 {
 					// Render light
 					fract = 0.96
-					color = light.Color
+					color = light.Material.Color
 				} else {
 					// Plane
 					planeNormal := planes[intersectedIdx-len(spheres)].Normal
 					normalToReverseCamera := planeNormal[0]*-ray.Dir[0] + planeNormal[1]*-ray.Dir[1] + planeNormal[2]*-ray.Dir[2]
 					fract = max(0.0, normalToReverseCamera)
-					color = planes[intersectedIdx-len(spheres)].Color
+					color = planes[intersectedIdx-len(spheres)].Material.Color
 				}
 
 				// Render RGBA for current pixel in one go. fract is multiplied by 255 so it can be stuffed directly into

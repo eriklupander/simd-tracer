@@ -18,14 +18,6 @@ const (
 	IntersectTypeTriangle
 )
 
-// hard-coded make-believe sphere representing the point light.
-var light = std.Sphere{
-	Center:        &std.Vec4{2, 5.5, 0},
-	Radius:        2,
-	RadiusSquared: 4,
-	Color:         std.Vec4{1, 1, 1},
-}
-
 // hitResult holds the outcome of closest-intersection testing for a single ray.
 // idx is the raw index within the primitive's own slice — no offset encoding.
 type hitResult struct {
@@ -35,9 +27,7 @@ type hitResult struct {
 	u, v float32 // barycentric coords, used for triangles
 }
 
-func Render(width, height int, spheres *Spheres, planes *Planes, triangles *Triangles, lightSamples int, renderTo *bytes.Buffer) {
-	hitToLightDir := &std.Vec4{2, 5.4, 0}
-
+func Render(width, height int, spheres *Spheres, planes *Planes, triangles *Triangles, lights []std.Sphere, lightSamples int, renderTo *bytes.Buffer) {
 	cameraOrigin := &std.Vec4{3, 4, 20}
 	lookAt := &std.Vec4{3, 4, 0}
 	up := &std.Vec4{0, 1, 0}
@@ -55,6 +45,11 @@ func Render(width, height int, spheres *Spheres, planes *Planes, triangles *Tria
 	var shadowRay = &std.Ray{Dir: &std.Vec4{}, Orig: &std.Vec4{}}
 	var hitPoint = &std.Vec4{}
 	var hitNormal = &std.Vec4{}
+	var sphereCenter = &std.Vec4{}
+	var lnormal = &std.Vec4{}
+	var pointOnHemisphere = &std.Vec4{}
+
+	invLightSamples := float32(1.0) / float32(lightSamples)
 
 	for j := 0; j < height; j++ {
 
@@ -68,89 +63,138 @@ func Render(width, height int, spheres *Spheres, planes *Planes, triangles *Tria
 			dir.Normalize()
 			ray.Dir = dir
 
-			hit := findClosestHit(ray, spheres, planes, triangles)
-			if hit.kind == IntersectTypeNone {
+			// findClosestHit — inlined
+			hitT := float32(math.MaxFloat32)
+			hitIdx := 0
+			hitKind := IntersectTypeNone
+			var hitU, hitV float32
+			var color std.Vec4
+			var litFract float32
+			var finalFract float32
+			if t, u, v, idx, ok := IntersectTrianglesSIMD(ray, triangles); ok {
+				hitT, hitIdx, hitKind, hitU, hitV = t, idx, IntersectTypeTriangle, u, v
+			}
+			if t, idx, ok := IntersectPlanesSIMD(ray, planes); ok && t < hitT {
+				hitT, hitIdx, hitKind = t, idx, IntersectTypePlane
+			}
+			if t, idx, ok := IntersectSpheresSIMD(ray, spheres); ok && t < hitT {
+				hitT, hitIdx, hitKind = t, idx, IntersectTypeSphere
+			}
+
+			// Test primary ray against light spheres; emissive hit takes priority if closer.
+			for li := range lights {
+				lsphere := &lights[li]
+				if t, ok := std.IntersectSphere(ray, lsphere.Center, lsphere.RadiusSquared); ok && t < hitT {
+					intensity := float32(lsphere.Material.Intensity)
+					renderTo.Write([]byte{
+						byte(min(lsphere.Material.Color[0]*intensity*255, 255)),
+						byte(min(lsphere.Material.Color[1]*intensity*255, 255)),
+						byte(min(lsphere.Material.Color[2]*intensity*255, 255)),
+						0xFF,
+					})
+					goto nextPixel
+				}
+			}
+
+			if hitKind == IntersectTypeNone {
 				renderTo.Write([]byte{0x00, 0x00, 0x00, 0xFF})
 				continue
 			}
 
-			std.AddMulVec4(ray.Orig, ray.Dir, hit.t, hitPoint)
+			// Compute hit point, i.e. a point at distance hitT along the ray.
+			std.AddMulVec4(ray.Orig, ray.Dir, hitT, hitPoint)
 
-			// Surface normal is needed before the shadow test for spheres (N·L self-shadow check).
-			if hit.kind == IntersectTypeSphere {
-				std.Sub(hitPoint, &std.Vec4{spheres.CenterX[hit.idx], spheres.CenterY[hit.idx], spheres.CenterZ[hit.idx], 0}, hitNormal)
+			// Compute surface normal for lighting.
+			switch hitKind {
+			case IntersectTypeSphere:
+				sphereCenter[0] = spheres.CenterX[hitIdx]
+				sphereCenter[1] = spheres.CenterY[hitIdx]
+				sphereCenter[2] = spheres.CenterZ[hitIdx]
+				sphereCenter[3] = 0
+				std.Sub(hitPoint, sphereCenter, hitNormal)
 				hitNormal.Normalize()
+			case IntersectTypePlane:
+				hitNormal[0] = planes.NormalX[hitIdx]
+				hitNormal[1] = planes.NormalY[hitIdx]
+				hitNormal[2] = planes.NormalZ[hitIdx]
+				hitNormal[3] = 0
 			}
 
-			computeShadowRay(hitToLightDir, hitPoint, shadowRay)
+			// Area light sampling: for each light, cast lightSamples shadow rays toward
+			// random points on the light sphere and accumulate the N·L diffuse contribution.
+			litFract = 0
+			for li := range lights {
+				lsphere := &lights[li]
 
-			var color std.Vec4
-			var fract float32
-			if isObstructed(hit, shadowRay, hitNormal, spheres) {
-				color = obstructedColor
-			} else {
-				color, fract = shade(hit, ray, hitNormal, spheres, planes)
+				// Direction from the light center to the hit point. After normalising this
+				// becomes the outward normal of the light sphere at the point facing us, which
+				// defines which hemisphere we pointOnHemisphere — we only want points on the side of the
+				// light that is visible from the surface, not the far side.
+				lnormal[0] = hitPoint[0] - lsphere.Center[0]
+				lnormal[1] = hitPoint[1] - lsphere.Center[1]
+				lnormal[2] = hitPoint[2] - lsphere.Center[2]
+				lnormal[3] = 0
+				lnormal.Normalize()
+
+				for range lightSamples {
+					// Pick a uniformly distributed random point on the hemisphere of the
+					// light sphere that faces the hit point, writing the world-space position
+					// into pointOnHemisphere.
+					RandomPointOnHemisphere(*lsphere, *lnormal, pointOnHemisphere)
+
+					// Build a shadow ray from the hit point toward the sampled light position.
+					// The direction is the un-normalised vector from hit point to pointOnHemisphere; we
+					// offset the origin slightly along that direction to avoid self-intersection
+					// with the surface we just hit.
+					shadowRay.Dir[0] = pointOnHemisphere[0] - hitPoint[0]
+					shadowRay.Dir[1] = pointOnHemisphere[1] - hitPoint[1]
+					shadowRay.Dir[2] = pointOnHemisphere[2] - hitPoint[2]
+					shadowRay.Dir[3] = 0
+					shadowRay.Orig[0] = hitPoint[0] + shadowRay.Dir[0]*0.01
+					shadowRay.Orig[1] = hitPoint[1] + shadowRay.Dir[1]*0.01
+					shadowRay.Orig[2] = hitPoint[2] + shadowRay.Dir[2]*0.01
+					shadowRay.Dir.Normalize()
+
+					// N·L: cosine of the angle between the surface normal and the direction
+					// toward this light's pointOnHemisphere. Negative or zero means the light is behind or
+					// tangent to the surface — no contribution.
+					nl := hitNormal.DotProduct(shadowRay.Dir)
+					if nl <= 0 {
+						continue
+					}
+					// Only add the contribution if nothing blocks the path to the light pointOnHemisphere.
+					// The N·L term gives a physically correct Lambertian falloff; multiplying by
+					// intensity scales the brightness of the light source.
+					if !IntersectSpheresSIMDShadowRay(shadowRay, spheres) {
+						litFract += nl * float32(lsphere.Material.Intensity)
+					}
+				}
 			}
+			// Average over samples so that increasing lightSamples improves quality without
+			// changing the overall brightness of the scene.
+			litFract *= invLightSamples
 
-			finalFract := fract * 255
+			color = shade(hitResult{t: hitT, idx: hitIdx, kind: hitKind, u: hitU, v: hitV}, spheres, planes)
+
+			finalFract = litFract * 255
 			renderTo.Write([]byte{byte(color[0] * finalFract), byte(color[1] * finalFract), byte(color[2] * finalFract), 0xFF})
+		nextPixel:
 		}
 	}
 }
 
-// findClosestHit runs all three intersection tests and returns the nearest hit.
-func findClosestHit(ray *std.Ray, spheres *Spheres, planes *Planes, triangles *Triangles) hitResult {
-	result := hitResult{t: math.MaxFloat32, kind: IntersectTypeNone}
-
-	if t, u, v, idx, hit := IntersectTrianglesSIMD(ray, triangles); hit {
-		result = hitResult{t: t, idx: idx, kind: IntersectTypeTriangle, u: u, v: v}
-	}
-	if t, idx, hit := IntersectPlanesSIMD(ray, planes); hit && t < result.t {
-		result = hitResult{t: t, idx: idx, kind: IntersectTypePlane}
-	}
-	if t, idx, hit := IntersectSpheresSIMD(ray, spheres); hit && t < result.t {
-		result = hitResult{t: t, idx: idx, kind: IntersectTypeSphere}
-	}
-
-	return result
-}
-
-// isObstructed returns true if the path to the light is blocked.
-// For sphere hits, a N·L ≤ 0 check short-circuits the more expensive SIMD shadow ray test.
-func isObstructed(hit hitResult, shadowRay *std.Ray, hitNormal *std.Vec4, spheres *Spheres) bool {
-	if hit.kind == IntersectTypeSphere && hitNormal.DotProduct(shadowRay.Dir) <= 0 {
-		return true
-	}
-	return IntersectSpheresSIMDShadowRay(shadowRay, spheres)
-}
-
-// shade computes the surface color and brightness fraction for an unobstructed hit.
-func shade(hit hitResult, ray *std.Ray, hitNormal *std.Vec4, spheres *Spheres, planes *Planes) (std.Vec4, float32) {
+// shade returns the surface color for a hit. Lighting (N·L) is computed separately in the area light loop.
+func shade(hit hitResult, spheres *Spheres, planes *Planes) std.Vec4 {
 	switch hit.kind {
 	case IntersectTypeSphere:
-		fract := max(0.0, hitNormal[0]*-ray.Dir[0]+hitNormal[1]*-ray.Dir[1]+hitNormal[2]*-ray.Dir[2])
-		return spheres.Color[hit.idx], fract
-
+		return spheres.Color[hit.idx]
 	case IntersectTypePlane:
-		fract := max(0.0, planes.NormalX[hit.idx]*-ray.Dir[0]+planes.NormalY[hit.idx]*-ray.Dir[1]+planes.NormalZ[hit.idx]*-ray.Dir[2])
-		return planes.Color[hit.idx], fract
-
+		return planes.Color[hit.idx]
 	case IntersectTypeTriangle:
-		return std.Vec4{hit.u, hit.v, hit.u * hit.v, 1.0}, 1.0
+		return std.Vec4{hit.u, hit.v, hit.u * hit.v, 1.0}
 	default:
-		return obstructedColor, 0
+		return obstructedColor
 	}
-}
-
-func computeShadowRay(hitToLightDir *std.Vec4, hitPoint *std.Vec4, shadowRay *std.Ray) {
-	std.Sub(hitToLightDir, hitPoint, shadowRay.Dir)
-
-	shadowRay.Orig = &std.Vec4{}
-	shadowRay.Orig[0] = hitPoint[0] + shadowRay.Dir[0]*0.01
-	shadowRay.Orig[1] = hitPoint[1] + shadowRay.Dir[1]*0.01
-	shadowRay.Orig[2] = hitPoint[2] + shadowRay.Dir[2]*0.01
-
-	shadowRay.Dir.Normalize()
 }
 
 func deg2rad(deg float64) float64 {

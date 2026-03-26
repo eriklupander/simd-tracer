@@ -231,7 +231,5 @@ type Sphere struct {
 	Center        *Vec4
 	Radius        float32
 	RadiusSquared float32
-	Color         Vec4
-	Emissive      bool
-	Intensity     float64
+	Material      Material
 }

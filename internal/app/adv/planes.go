@@ -150,7 +150,7 @@ func PlanesAsStructOfArrays(planes []std.Plane) *Planes {
 		out.PointX[i] = pl.Point[0]
 		out.PointY[i] = pl.Point[1]
 		out.PointZ[i] = pl.Point[2]
-		out.Color[i] = pl.Color
+		out.Color[i] = pl.Material.Color
 	}
 
 	// Ugly, but we need to pad to lane-size for SIMD, e.g. multiples of 8 if using AVX2

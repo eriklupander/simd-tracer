@@ -248,7 +248,7 @@ func StandardSpheres() []std.Sphere {
 		Center:        &std.Vec4{0, 0, 0, 0},
 		Radius:        1,
 		RadiusSquared: 1,
-		Color:         std.Vec4{1, 0, 0},
+		Material:      std.Material{Color: std.Vec4{1, 0, 0}},
 	})
 
 	// 3 unit to the left (green)
@@ -256,7 +256,7 @@ func StandardSpheres() []std.Sphere {
 		Center:        &std.Vec4{-3, 0, 0, 0},
 		Radius:        1,
 		RadiusSquared: 1,
-		Color:         std.Vec4{0, 1, 0},
+		Material:      std.Material{Color: std.Vec4{0, 1, 0}},
 	})
 
 	// 3 unit to the right (blue)
@@ -264,7 +264,7 @@ func StandardSpheres() []std.Sphere {
 		Center:        &std.Vec4{3, 0, 0, 0},
 		Radius:        1,
 		RadiusSquared: 1,
-		Color:         std.Vec4{0, 0, 1},
+		Material:      std.Material{Color: std.Vec4{0, 0, 1}},
 	})
 
 	// 3 units up
@@ -272,7 +272,7 @@ func StandardSpheres() []std.Sphere {
 		Center:        &std.Vec4{0, 3, 0, 0},
 		Radius:        1,
 		RadiusSquared: 1,
-		Color:         std.Vec4{0, 1, 1},
+		Material:      std.Material{Color: std.Vec4{0, 1, 1}},
 	})
 
 	// Closer to the camera
@@ -280,7 +280,7 @@ func StandardSpheres() []std.Sphere {
 		Center:        &std.Vec4{0, 0, 3, 0},
 		Radius:        1,
 		RadiusSquared: 1,
-		Color:         std.Vec4{1, 1, 0},
+		Material:      std.Material{Color: std.Vec4{1, 1, 0}},
 	})
 
 	// Even closer
@@ -288,7 +288,7 @@ func StandardSpheres() []std.Sphere {
 		Center:        &std.Vec4{0, 0, 6, 0},
 		Radius:        1,
 		RadiusSquared: 1,
-		Color:         std.Vec4{0.8, 0.8, 0.8},
+		Material:      std.Material{Color: std.Vec4{0.8, 0.8, 0.8}},
 	})
 
 	return spheres

@@ -13,7 +13,11 @@ import (
 // surface of sphere s, restricted to the hemisphere that faces toward normal.
 // normal should be the unit vector pointing from the sphere center toward the
 // shading point (i.e. the hemisphere of the sphere visible from that point).
-func RandomPointOnHemisphere(s std.Sphere, normal std.Vec4) std.Vec4 {
+// RandomPointOnHemisphere writes a uniformly distributed random point on the
+// surface of sphere s into out, restricted to the hemisphere that faces toward normal.
+// normal should be the unit vector pointing from the sphere center toward the
+// shading point (i.e. the hemisphere of the sphere visible from that point).
+func RandomPointOnHemisphere(s std.Sphere, normal std.Vec4, out *std.Vec4) {
 	// Uniform hemisphere sampling: u1 = cos(theta), u2 drives phi.
 	u1 := rand.Float32()
 	u2 := rand.Float32()
@@ -40,10 +44,8 @@ func RandomPointOnHemisphere(s std.Sphere, normal std.Vec4) std.Vec4 {
 	normal.CrossProduct(&tangent, &bitangent)
 
 	// Rotate local sample into world space and scale to sphere surface.
-	return std.Vec4{
-		s.Center[0] + (tangent[0]*lx+bitangent[0]*ly+normal[0]*lz)*s.Radius,
-		s.Center[1] + (tangent[1]*lx+bitangent[1]*ly+normal[1]*lz)*s.Radius,
-		s.Center[2] + (tangent[2]*lx+bitangent[2]*ly+normal[2]*lz)*s.Radius,
-		0,
-	}
+	out[0] = s.Center[0] + (tangent[0]*lx+bitangent[0]*ly+normal[0]*lz)*s.Radius
+	out[1] = s.Center[1] + (tangent[1]*lx+bitangent[1]*ly+normal[1]*lz)*s.Radius
+	out[2] = s.Center[2] + (tangent[2]*lx+bitangent[2]*ly+normal[2]*lz)*s.Radius
+	out[3] = 0
 }
