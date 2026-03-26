@@ -40,7 +40,7 @@ func main() {
 	simdSpheres := adv.AsStructOfArrays(spheres)
 	simdPlanes := adv.PlanesAsStructOfArrays(planes)
 	//simdTriangles := adv.TrianglesSmallSideBySide()
-	
+
 	outBuf := new(bytes.Buffer)
 	st := time.Now()
 	for range iterations {
