@@ -1,6 +1,7 @@
 package adv
 
 import (
+	"math/bits"
 	"simd/archsimd"
 	"testing"
 
@@ -50,10 +51,24 @@ func TestShadowRayNoIntersection(t *testing.T) {
 	assert.False(t, IntersectSpheresSIMDShadowRay(ray, spheres))
 }
 
-func TestShadowRayWithIntersection(t *testing.T) {
+// TestShadowRaySixtyFourNoIntersection checks that a shadow ray from a floor hit
+// (where no sphere should be in the path to the light) returns false.
+// Floor is at y=-4, light at {2,5.4,0}. Shadow ray from (0,-4,5) toward light.
+func TestShadowRaySixtyFourNoIntersection(t *testing.T) {
+	// Shadow ray direction (unnormalized) = lightPos - hitPoint = (2, 9.4, -5)
+	dir := &std.Vec4{0.1847, 0.8687, -0.4617, 0} // normalized
+	orig := &std.Vec4{0.02, -3.906, 4.95, 0}     // hitPoint + epsilon*dir
 
-	dir := &std.Vec4{0.19469759, 0.60765696, -0.76996493, 0}
-	orig := &std.Vec4{-0.123568535, -1.2277203, 8.398015, 0} // Move down a bit
+	ray := &std.Ray{Orig: orig, Dir: dir}
+	spheres := AsStructOfArrays(std.SixtyFourSpheres())
+	assert.False(t, IntersectSpheresSIMDShadowRay(ray, spheres))
+}
+
+func TestShadowRayWithIntersection(t *testing.T) {
+	// Ray origin is outside all spheres, pointing directly at sphere centered at {-0.5, -1, 3}.
+	// t0 = dist - radius = 2 - 1 = 1 > 0, so this is a genuine (non-self) intersection.
+	dir := &std.Vec4{0, 0, -1, 0}
+	orig := &std.Vec4{-0.5, -1, 5, 0}
 
 	ray := &std.Ray{
 		Orig: orig,
@@ -166,6 +181,28 @@ func Benchmark16IntersectSpheresSIMD(b *testing.B) {
 	}
 }
 
+func Benchmark512IntersectSpheres(b *testing.B) {
+	ray := &std.Ray{
+		Orig: &std.Vec4{3, 4, 20, 0},
+		Dir:  &std.Vec4{-0.16645914, -0.24594483, -0.95488346, 0},
+	}
+	spheres := AsStructOfArrays(std.SixtyFourSpheres())
+	for b.Loop() {
+		_, _, _ = IntersectSpheres(ray, spheres)
+	}
+}
+
+func Benchmark512IntersectSpheresSIMD(b *testing.B) {
+	ray := &std.Ray{
+		Orig: &std.Vec4{3, 4, 20, 0},
+		Dir:  &std.Vec4{-0.16645914, -0.24594483, -0.95488346, 0},
+	}
+	spheres := AsStructOfArrays(std.SixtyFourSpheres())
+	for b.Loop() {
+		_, _, _ = IntersectSpheresSIMD(ray, spheres)
+	}
+}
+
 func Benchmark16IntersectSpheresSIMDMinIndexScalar(b *testing.B) {
 	ray := &std.Ray{
 		Orig: &std.Vec4{3, 4, 20, 0},
@@ -255,4 +292,89 @@ func StandardSpheres() []std.Sphere {
 	})
 
 	return spheres
+}
+
+func TestDivide(t *testing.T) {
+	assert.Equal(t, 4, findBitIndex(0b00001000))
+	assert.Equal(t, 6, findBitIndex(0b00000010))
+	assert.Equal(t, 0, findBitIndex(0b10000000))
+	assert.Equal(t, 2, findBitIndex(0b00100000))
+}
+
+var R int
+
+func BenchmarkFindBitIndex(b *testing.B) {
+	for b.Loop() {
+		R = findBitIndex(0b00001000)
+		R = findBitIndex(0b00000010)
+		R = findBitIndex(0b10000000)
+		R = findBitIndex(0b00100000)
+		R = findBitIndex(0b00001000)
+		R = findBitIndex(0b00000010)
+		R = findBitIndex(0b10000000)
+		R = findBitIndex(0b00100000)
+		R = findBitIndex(0b00001000)
+		R = findBitIndex(0b00000010)
+		R = findBitIndex(0b10000000)
+		R = findBitIndex(0b00100000)
+	}
+}
+
+func BenchmarkFindBitIndex2(b *testing.B) {
+	for b.Loop() {
+		R = findCurrentIndex(0b00001000, 0)
+		R = findCurrentIndex(0b00000010, 0)
+		R = findCurrentIndex(0b10000000, 0)
+		R = findCurrentIndex(0b00100000, 0)
+		R = findCurrentIndex(0b00001000, 0)
+		R = findCurrentIndex(0b00000010, 0)
+		R = findCurrentIndex(0b10000000, 0)
+		R = findCurrentIndex(0b00100000, 0)
+		R = findCurrentIndex(0b00001000, 0)
+		R = findCurrentIndex(0b00000010, 0)
+		R = findCurrentIndex(0b10000000, 0)
+		R = findCurrentIndex(0b00100000, 0)
+	}
+}
+
+func findBitIndex(b1 uint8) int {
+	if b1&0b1111 != 0 {
+		// Low nibble
+		if b1&0011 != 0 {
+			// Low half
+			if b1>>2&01 != 0 {
+				return 5
+			} else {
+				return 4
+			}
+		} else {
+			// Low half
+			if b1&01 != 0 {
+				return 7
+			} else {
+				return 6
+			}
+		}
+	} else {
+		// High nibble
+		if b1>>4&0011 != 0 {
+			// Low half
+			if b1>>6&01 != 0 {
+				return 1
+			} else {
+				return 0
+			}
+		} else {
+			// Low half
+			if b1>>4&01 != 0 {
+				return 3
+			} else {
+				return 2
+			}
+		}
+	}
+}
+
+func TestTrailing(t *testing.T) {
+	assert.Equal(t, 6, bits.TrailingZeros8(0b01000000))
 }

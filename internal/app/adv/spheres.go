@@ -214,7 +214,6 @@ func IntersectSpheresSIMD(r *std.Ray, spheres *Spheres) (float32, int, bool) {
 
 	currentMin := archsimd.BroadcastFloat32x4(math.MaxFloat32)
 	currentMask := uint8(0)
-	//currentIndex := -1
 	currentBatch := -1
 	for i := 0; i < spheres.Count; i += 8 {
 		spheresCenterX := archsimd.LoadFloat32x8Slice(spheres.CenterX[i : i+8])
@@ -334,8 +333,9 @@ func IntersectSpheresSIMD(r *std.Ray, spheres *Spheres) (float32, int, bool) {
 
 	// Extract scalar value for the tMin.
 	tMin := currentMin.GetElem(0)
+	//currentIndex := currentBatch + (8 - bits.TrailingZeros8(currentMask))
 	currentIndex := findCurrentIndex(currentMask, currentBatch)
-	return tMin, currentIndex, currentIndex != -1
+	return tMin, currentIndex, true
 }
 
 func findCurrentIndex(currentMask uint8, currentBatch int) int {
@@ -367,26 +367,6 @@ func findCurrentIndex(currentMask uint8, currentBatch int) int {
 		}
 	}
 }
-
-//
-//var zeroElemSet = [8]int32{-1, 0, 0, 0, 0, 0, 0, 0}
-//var firstElemSet = [8]int32{0, -1, 0, 0, 0, 0, 0, 0}
-//var secondElemSet = [8]int32{0, 0, -1, 0, 0, 0, 0, 0}
-//var thirdElemSet = [8]int32{0, 0, 0, -1, 0, 0, 0, 0}
-//var fourthElemSet = [8]int32{0, 0, 0, -1, 0, 0, 0, 0}
-//var fifthElemSet = [8]int32{0, 0, 0, -1, 0, 0, 0, 0}
-//var sixthElemSet = [8]int32{0, 0, 0, -1, 0, 0, 0, 0}
-//var seventhElemSet = [8]int32{0, 0, 0, -1, 0, 0, 0, 0}
-//var bitMap = map[[8]int32]int{
-//	zeroElemSet: 0,
-//	firstElemSet: 1,
-//	thirdElemSet: 2,
-//	zeroElemSet: 3,
-//	fifthElemSet: 4,
-//	zeroElemSet: 5,
-//	sixthElemSet: 6,
-//	seventhElemSet: 7,
-//}
 
 // resolveCurrentIndex: Given two 4x masks, indexed 0-3, 4-7, where at most one mask element is non-zero, this function
 // returns the index of the set element, with offset added. If no match could be obtained,
@@ -490,8 +470,6 @@ func IntersectSpheresSIMDShadowRay(r *std.Ray, spheres *Spheres) bool {
 
 		// Next mask, d2 must be greater than sphere radius squared. If no d2 fulfills that criteria, exit early.
 		d2Mask := spheresRadiusSquared.Greater(d2)
-
-		//// fmt.Printf("D2Mask: %v\n", d2Mask)
 		if d2Mask.ToInt32x8().IsZero() {
 			continue
 		}
@@ -500,15 +478,10 @@ func IntersectSpheresSIMDShadowRay(r *std.Ray, spheres *Spheres) bool {
 		thc := spheresRadiusSquared.Sub(d2)
 		thcSqrt := thc.Sqrt()
 		t0 := tcas.Sub(thcSqrt)
-		t1 := tcas.Add(thcSqrt)
 
-		zero := archsimd.BroadcastFloat32x8(0.0)
-		m1 := t0.Greater(zero)
-		zero = archsimd.BroadcastFloat32x8(0.0)
-		m2 := t1.Greater(zero)
-
-		if m1.ToInt32x8().IsZero() && m2.ToInt32x8().IsZero() {
-			// No intersection
+		// Only need to check first intersection. If none of the spheres being tested intersects the shadow
+		// ray, then continue on with the next batch.
+		if t0.Masked(d2Mask).Greater(zeroes).ToBits() == 0x00 {
 			continue
 		}
 

@@ -115,26 +115,34 @@ func Render(width, height int, spheres *Spheres, planes *Planes, triangles *Tria
 				// cast a shadow ray against point light (represented by white sphere)
 				computeShadowRay(hitToLightDir, hitPoint, shadowRay)
 
-				// In our cornell box, the planes cannot cast shadows anyway, so just try to intersect spheres occluding
-				// the path to the point light. (For soft shadows, pick a random point in the hemisphere of the light
-				// sphere and sample until results are good. This is (of course) much slower.
-				//
-				// Also, note that we can simplify shadow ray checking, there is no need to know minT or _which_ primitive
-				// that obstructed the ray to the light source.
-				//fmt.Printf("Orig: %v,%v,%v\n", shadowRay.Orig[0], shadowRay.Orig[1], shadowRay.Orig[2])
-				//fmt.Printf("Dir  :%v,%v,%v\n", shadowRay.Dir[0], shadowRay.Dir[1], shadowRay.Dir[2])
-				obstructed := IntersectSpheresSIMDShadowRay(shadowRay, spheres) //|| IntersectTrianglesShadowRaySIMD(shadowRay, triangles)
+				// For shadows, first compute hit normal and then check if it is facing away from the light source
+				var obstructed = false
+				if intersectedType == IntersectTypeSphere {
+					std.Sub(hitPoint, &std.Vec4{spheres.CenterX[intersectedIdx], spheres.CenterY[intersectedIdx], spheres.CenterZ[intersectedIdx], 0}, hitNormal)
+					hitNormal.Normalize()
+					if hitNormal.DotProduct(shadowRay.Dir) <= 0 {
+						obstructed = true
+					}
+				}
 
-				// Compute final pixel color. Uses a hideous trick to discern spheres from planes by offsetting
-				// plane intersection index (intersectedIdx) with the number of spheres.
+				// In our cornell box, the planes cannot cast shadows anyway, so just try to intersect spheres occluding
+				// the path to the point light.
+
+				// Check first if self-shadowed, no need to perform expensive shadow ray casting if intersected point is
+				// pointing away from direction of point light source.
+				if !obstructed {
+					obstructed = IntersectSpheresSIMDShadowRay(shadowRay, spheres)
+				}
+
+				// Compute final pixel color. Uses a hideous trick to discern spheres from planes and triangles by offsetting
+				// the intersection index (intersectedIdx) with the number of spheres and/or triangles.
 				if obstructed {
 					fract = 0.0
 					color = obstructedColor
 				} else {
 					switch intersectedType {
 					case IntersectTypeSphere:
-						std.Sub(hitPoint, &std.Vec4{spheres.CenterX[intersectedIdx], spheres.CenterY[intersectedIdx], spheres.CenterZ[intersectedIdx], 0}, hitNormal)
-						hitNormal.Normalize()
+						// Note: Hit normal already computed.
 
 						normalToReverseCamera := hitNormal[0]*-ray.Dir[0] + hitNormal[1]*-ray.Dir[1] + hitNormal[2]*-ray.Dir[2]
 						fract = max(0.0, normalToReverseCamera)
@@ -147,7 +155,7 @@ func Render(width, height int, spheres *Spheres, planes *Planes, triangles *Tria
 						fract = max(0.0, normalToReverseCamera)
 						color = planes.Color[planeIdx]
 					case IntersectTypeTriangle:
-						// Triangle
+						// Triangle. Note that this is just placeholder/boilerplate.
 						color = std.Vec4{1.0 * u, 1.0 * v, 1.0 * u * v, 1.0}
 						fract = 1.0
 					default:
@@ -170,8 +178,8 @@ func Render(width, height int, spheres *Spheres, planes *Planes, triangles *Tria
 func computeShadowRay(hitToLightDir *std.Vec4, hitPoint *std.Vec4, shadowRay *std.Ray) {
 	std.Sub(hitToLightDir, hitPoint, shadowRay.Dir)
 
-	shadowRay.Orig = &std.Vec4{}                            // Should translate by epsilon along shadow Dir
-	shadowRay.Orig[0] = hitPoint[0] + shadowRay.Dir[0]*0.01 // Should translate by epsilon along shadow Dir
+	shadowRay.Orig = &std.Vec4{}
+	shadowRay.Orig[0] = hitPoint[0] + shadowRay.Dir[0]*0.01 // Translate by epsilon along shadow Dir
 	shadowRay.Orig[1] = hitPoint[1] + shadowRay.Dir[1]*0.01
 	shadowRay.Orig[2] = hitPoint[2] + shadowRay.Dir[2]*0.01
 

@@ -127,3 +127,39 @@ func SixteenSpheres() []Sphere {
 	}
 	return spheres
 }
+
+func OneSphere() []Sphere {
+	spheres := make([]Sphere, 0)
+	spheres = append(spheres, Sphere{
+		Center:        &Vec4{0, .5, 0, 0},
+		RadiusSquared: 1.5,
+		Color:         Vec4{float32(2) * 0.25, float32(3) * 0.25, 1 - (float32(4) * 0.25)},
+	})
+
+	for range 7 {
+		spheres = append(spheres, Sphere{
+			Center:        &Vec4{-1000, 0, 0, 0},
+			RadiusSquared: 1,
+			Color:         Vec4{float32(2) * 0.25, float32(3) * 0.25, 1 - (float32(4) * 0.25)},
+		})
+	}
+	return spheres
+}
+
+func SixtyFourSpheres() []Sphere {
+	spheres := make([]Sphere, 0)
+	for x := range 4 {
+		yOffset := float32(-1 + float32(x)*1.5) // max y=3.5, well below light at y=5.4
+		for i := range 4 {
+			xOffset := -3 + float32(i)*2.5
+			for j := range 4 {
+				spheres = append(spheres, Sphere{
+					Center:        &Vec4{xOffset, yOffset, 3 + float32(j)*3.0, 0},
+					RadiusSquared: 0.6 * 0.6,
+					Color:         Vec4{float32(j) * 0.25, float32(x) * 0.25, 1 - (float32(i) * 0.25)},
+				})
+			}
+		}
+	}
+	return spheres
+}
